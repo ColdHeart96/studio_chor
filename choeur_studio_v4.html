@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chœur Studio</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 20% 10%, #1a1008 0%, #0a0a0f 60%, #080812 100%);
+    font-family: Georgia, 'Times New Roman', serif;
+    color: #E8E0D0;
+  }
+  input[type=range] { cursor: pointer; outline: none; border: none; }
+  input[type=range]::-webkit-slider-thumb { appearance: none; width: 13px; height: 13px; border-radius: 50%; background: #E8C547; cursor: pointer; box-shadow: 0 0 5px #E8C54755; }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #E8C547; border: none; cursor: pointer; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: #2a2418; border-radius: 2px; }
+  @keyframes pulseRec { 0%,100%{box-shadow:0 0 40px #FF444455;transform:scale(1)} 50%{box-shadow:0 0 60px #FF4444aa;transform:scale(1.06)} }
+  @keyframes cdPop { 0%{transform:scale(1.8);opacity:0} 100%{transform:scale(1);opacity:1} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #app { max-width: 640px; margin: 0 auto; }
+
+  /* Header */
+  #header { padding: 20px 24px 0; border-bottom: 1px solid #1e1c18; background: linear-gradient(180deg, #12100a 0%, transparent 100%); }
+  #header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  #logo { display: flex; align-items: center; gap: 10; }
+  #logo-icon { width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(#E8C547,#B8962A); display: flex; align-items: center; justify-content: center; font-size: 15px; box-shadow: 0 0 16px #E8C54744; }
+  #logo-text { font-size: 17px; color: #E8C547; letter-spacing: 0.04em; }
+  #logo-sub { font-size: 10px; color: #555; letter-spacing: 0.14em; text-transform: uppercase; }
+  #status { font-size: 11px; color: #444; text-align: right; }
+  #tabs { display: flex; }
+  .tab-btn { padding: 10px 20px; background: transparent; border: none; border-bottom: 2px solid transparent; color: #555; cursor: pointer; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; font-family: inherit; transition: all 0.2s; }
+  .tab-btn.active { border-bottom-color: #E8C547; color: #E8C547; }
+
+  /* Content */
+  #content { padding: 24px; }
+
+  /* Cards */
+  .card { background: #12100a; border: 1px solid #1e1c18; border-radius: 12px; padding: 16px; margin-bottom: 10px; }
+  .card-accent { background: rgba(232,197,71,0.03); border-color: rgba(232,197,71,0.12); }
+  .section-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 10px; margin-top: 20px; }
+
+  /* Upload rows */
+  .upload-row { display: flex; align-items: center; gap: 12px; border: 2px dashed #2a2418; border-radius: 10px; padding: 14px 16px; cursor: pointer; background: transparent; transition: all 0.2s; margin-bottom: 8px; }
+  .upload-row:hover { opacity: 0.8; }
+  .upload-row.loaded { border-style: solid; }
+  .track-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; transition: all 0.2s; }
+
+  /* Controls */
+  .controls { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 18px 0; }
+  .play-big { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg,#E8C547,#B8962A); border: none; color: #0a0a0f; cursor: pointer; font-size: 22px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px #E8C54755; transition: all 0.15s; }
+  .play-big:hover { transform: scale(1.05); }
+  .icon-btn { width: 44px; height: 44px; border-radius: 50%; background: #12100a; border: 1px solid #1e1c18; color: #666; cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .icon-btn.active { background: #E8C54722; border-color: #E8C547; color: #E8C547; }
+  .icon-btn:hover { border-color: #2a2418; color: #888; }
+
+  /* Waveform */
+  canvas.waveform { width: 100%; border-radius: 6px; cursor: pointer; display: block; }
+
+  /* Sliders */
+  .speed-row { display: flex; align-items: center; gap: 12px; background: #12100a; border: 1px solid #1e1c18; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+  .speed-val { font-size: 20px; color: #E8C547; width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  /* Track mixer */
+  .track-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid #1e1c18; border-radius: 12px; margin-bottom: 8px; transition: all 0.2s; }
+  .mini-btn { padding: 3px 8px; border-radius: 4px; font-size: 11px; background: transparent; border: 1px solid #2a2418; color: #444; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .mini-btn.s-active { background: #E8C54722; border-color: #E8C547; color: #E8C547; }
+  .mini-btn.m-active { background: #FF444422; border-color: #FF4444; color: #FF4444; }
+
+  /* Recording */
+  .rec-circle { width: 80px; height: 80px; border-radius: 50%; background: #1a0a0a; border: 2px solid #2a1010; color: #553333; cursor: pointer; font-size: 28px; display: flex; align-items: center; justify-content: center; transition: all 0.3s; margin: 0 auto 16px; }
+  .rec-circle.active { background: radial-gradient(#FF4444,#CC2222); border-color: #FF4444; color: #fff; animation: pulseRec 1s infinite; }
+
+  /* VU Meter */
+  .vu-meter { display: flex; align-items: flex-end; gap: 3px; height: 28px; }
+  .vu-bar { width: 7px; border-radius: 2px; transition: height 0.06s ease; }
+
+  /* Big buttons */
+  .btn-lg { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 15px; font-family: inherit; letter-spacing: 0.06em; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
+  .btn-rec { background: linear-gradient(135deg,#CC2222,#881111); color: #fff; box-shadow: 0 0 24px #CC222244; }
+  .btn-save { background: linear-gradient(135deg,#1a4a1a,#0a2a0a); border: 1px solid #2a4a2a !important; color: #4ADE80; }
+  .btn-retry { background: #1a1010; border: 1px solid #1e1c18 !important; color: #888; }
+  .btn-delete { background: transparent; border: 1px solid #1a1814 !important; color: #555; }
+
+  /* Countdown */
+  #countdown-num { font-size: 96px; color: #E8C547; font-style: italic; text-shadow: 0 0 60px #E8C54788; text-align: center; animation: cdPop 1s ease-out; }
+
+  /* Takes */
+  .take-card { background: #12100a; border: 1px solid #1e1c18; border-radius: 12px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 12px; }
+  .take-card:hover { border-color: #2a2418; }
+  .take-card.playing { border-color: rgba(232,197,71,0.3); background: rgba(232,197,71,0.03); }
+  .take-play-btn { width: 38px; height: 38px; border-radius: 50%; background: #1a1814; border: 1px solid #2a2418; color: #666; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; transition: all 0.15s; }
+  .take-play-btn.active { background: linear-gradient(135deg,#E8C547,#B8962A); border: none; color: #0a0a0f; }
+  .badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; }
+
+  /* Progress bar */
+  .prog-container { height: 4px; background: #1e1c18; border-radius: 2px; cursor: pointer; position: relative; margin: 8px 0; }
+  .prog-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg,#B8962A,#E8C547); position: relative; transition: width 0.05s linear; }
+  .prog-thumb { position: absolute; right: -6px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; border-radius: 50%; background: #E8C547; box-shadow: 0 0 8px #E8C54788; }
+  .time-row { display: flex; justify-content: space-between; font-size: 12px; color: #555; font-variant-numeric: tabular-nums; }
+
+  /* Loop */
+  .loop-bar { height: 4px; background: #1e1c18; border-radius: 2px; position: relative; cursor: pointer; }
+  .loop-range { position: absolute; height: 100%; background: rgba(232,197,71,0.25); border-radius: 2px; }
+  .loop-handle { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 12px; height: 12px; border-radius: 50%; background: #E8C547; cursor: ew-resize; }
+
+  /* Review modes */
+  .mode-btn { padding: 4px 10px; border-radius: 6px; font-size: 11px; background: transparent; border: 1px solid #2a2418; color: #555; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .mode-btn.active { background: #E8C54722; border-color: #E8C547; color: #E8C547; }
+
+  /* Footer */
+  #footer { padding: 12px 24px; border-top: 1px solid #1a1814; display: flex; justify-content: space-between; margin-top: 20px; }
+  #footer span { font-size: 10px; color: #2a2418; }
+
+  /* Hidden */
+  .hidden { display: none !important; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- HEADER -->
+  <div id="header">
+    <div id="header-top">
+      <div id="logo">
+        <div id="logo-icon">♪</div>
+        <div style="margin-left:10px">
+          <div id="logo-text">Chœur Studio</div>
+          <div id="logo-sub">Outil d'apprentissage vocal</div>
+        </div>
+      </div>
+      <div id="status">Aucune piste chargée</div>
+    </div>
+    <div id="tabs">
+      <button class="tab-btn active" onclick="showTab('player')">♪ &nbsp;Lecteur</button>
+      <button class="tab-btn" onclick="showTab('record')">⏺ &nbsp;Enregistrer</button>
+      <button class="tab-btn" id="takes-tab-btn" onclick="showTab('takes')">◈ &nbsp;Prises (0)</button>
+    </div>
+  </div>
+
+  <div id="content">
+
+    <!-- ═══ PLAYER TAB ══════════════════════════════════════════════════════ -->
+    <div id="tab-player">
+      <div class="section-label">Charger les pistes audio</div>
+      <div id="upload-rows"></div>
+
+      <div id="player-main" class="hidden">
+        <div class="section-label">Aperçu des pistes</div>
+        <div id="waveforms"></div>
+        <div class="prog-container" id="seek-bar" onclick="handleSeek(event)">
+          <div class="prog-fill" id="prog-fill" style="width:0%">
+            <div class="prog-thumb"></div>
+          </div>
+        </div>
+        <div class="time-row">
+    <span id="time-current" style="color:#E8C547;font-size:14px;font-variant-numeric:tabular-nums">0:00</span>
+    <span id="timecode-display" style="color:#555;font-size:11px;letter-spacing:0.1em">00:00:000</span>
+    <span id="time-total">0:00</span>
+  </div>
+
+        <div class="controls">
+          <button class="icon-btn" onclick="seekRel(-0.1)" title="Reculer">⏮</button>
+          <button class="icon-btn" onclick="seekRel(-0.03)">⏪</button>
+          <button class="play-big" id="play-btn" onclick="togglePlay()">▶</button>
+          <button class="icon-btn" onclick="seekRel(0.03)">⏩</button>
+          <button class="icon-btn" id="loop-btn" onclick="toggleLoop()" title="Boucle A-B">⌁</button>
+        </div>
+
+        <div class="speed-row">
+          <span style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.1em;width:64px">Vitesse</span>
+          <span class="speed-val" id="speed-val">100%</span>
+          <input type="range" id="speed-slider" min="50" max="150" value="100" style="flex:1;appearance:none;height:3px;background:linear-gradient(90deg,#E8C547 50%,#2a2418 50%);border-radius:2px" oninput="updateSpeed(this.value)">
+          <button onclick="updateSpeed(100)" style="padding:4px 10px;background:transparent;border:1px solid #2a2418;border-radius:6px;color:#666;font-size:11px;cursor:pointer;font-family:inherit">Reset</button>
+        </div>
+
+        <div id="loop-panel" class="card hidden" style="margin-bottom:12px">
+          <div style="font-size:10px;color:#E8C547;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">Boucle A-B</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div>
+              <div style="font-size:11px;color:#888;margin-bottom:6px">A (début) : <span id="loop-a-time" style="color:#E8C547">0:00</span></div>
+              <input type="range" id="loop-a-slider" min="0" max="100" value="20" style="width:100%;appearance:none;height:3px;background:linear-gradient(90deg,#E8C547 20%,#2a2418 20%);border-radius:2px" oninput="updateLoopA(this.value)">
+            </div>
+            <div>
+              <div style="font-size:11px;color:#888;margin-bottom:6px">B (fin) : <span id="loop-b-time" style="color:#E8C547">0:00</span></div>
+              <input type="range" id="loop-b-slider" min="0" max="100" value="70" style="width:100%;appearance:none;height:3px;background:linear-gradient(90deg,#E8C547 70%,#2a2418 70%);border-radius:2px" oninput="updateLoopB(this.value)">
+            </div>
+          </div>
+        </div>
+
+        <!-- MARKERS -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;margin-bottom:6px">
+          <div class="section-label" style="margin:0">Marqueurs</div>
+          <button onclick="addMarker()" style="padding:4px 12px;background:#E8C54718;border:1px solid #E8C54744;border-radius:6px;color:#E8C547;font-size:11px;cursor:pointer;font-family:inherit">+ Ajouter ici</button>
+        </div>
+        <div id="markers-list" style="margin-bottom:12px"></div>
+        <canvas id="marker-waveform" style="display:none"></canvas>
+
+        <div class="section-label">Mixage des voix</div>
+        <div id="mixer-rows"></div>
+      </div>
+
+      <div id="empty-state" style="text-align:center;padding:48px 20px;color:#333">
+        <div style="font-size:40px;margin-bottom:12px">🎼</div>
+        <div style="font-size:14px;color:#555">Chargez au moins une piste pour commencer</div>
+      </div>
+    </div>
+
+    <!-- ═══ RECORD TAB ══════════════════════════════════════════════════════ -->
+    <div id="tab-record" class="hidden">
+      <div id="rec-idle">
+        <div id="no-tracks-warning" class="hidden" style="padding:16px;background:#1a1010;border:1px solid #2a1010;border-radius:10px;font-size:13px;color:#886655;margin-bottom:16px">
+          ⚠ Chargez d'abord des pistes dans l'onglet Lecteur pour enregistrer avec un backing track.
+        </div>
+        <div class="section-label">Pistes de référence (backing track)</div>
+        <div id="backing-rows"></div>
+        <div class="section-label">Microphone</div>
+        <div class="card" style="display:flex;align-items:center;gap:14px;padding:14px">
+          <span style="font-size:22px">🎤</span>
+          <div class="vu-meter" id="vu-idle"></div>
+          <span id="mic-status" style="font-size:11px;color:#555">En attente</span>
+        </div>
+        <button class="btn-lg btn-rec" onclick="startCountdown()">⏺ &nbsp;Démarrer l'enregistrement</button>
+      </div>
+
+      <div id="rec-countdown" class="hidden" style="text-align:center;padding:48px 0">
+        <div style="font-size:13px;color:#666;letter-spacing:0.2em;text-transform:uppercase;margin-bottom:24px">Préparez-vous…</div>
+        <div id="countdown-num" style="font-size:96px;color:#E8C547;font-style:italic;text-shadow:0 0 60px #E8C54788;animation:cdPop 1s ease-out">3</div>
+        <div style="font-size:12px;color:#555;margin-top:24px">Commencez à chanter au départ</div>
+      </div>
+
+      <div id="rec-recording" class="hidden">
+        <div class="rec-circle active">⏺</div>
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="font-size:11px;color:#FF4444;letter-spacing:0.2em;text-transform:uppercase">Enregistrement en cours</div>
+          <div id="rec-time" style="font-size:32px;color:#E8E0D0;font-variant-numeric:tabular-nums;margin-top:4px">0:00</div>
+        </div>
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+            <span style="font-size:12px;color:#888">Micro</span>
+            <div class="vu-meter" id="vu-recording"></div>
+          </div>
+          <div style="height:4px;background:#1e1c18;border-radius:2px"><div id="rec-prog-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#CC2222,#FF6644);border-radius:2px;transition:width 0.1s"></div></div>
+        </div>
+        <button class="btn-lg btn-retry" style="border:1px solid #1e1c18" onclick="stopRecording()">⏹ &nbsp;Arrêter</button>
+      </div>
+
+      <div id="rec-review" class="hidden">
+        <div style="text-align:center;margin-bottom:20px">
+          <div style="font-size:13px;color:#4ADE80;letter-spacing:0.1em" id="rec-duration-label">✓ Enregistrement capturé</div>
+        </div>
+        <div class="card">
+          <div style="margin-bottom:12px">
+            <span style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:0.1em">Réécoute — Choisissez ce que vous entendez</span>
+          </div>
+
+          <!-- Ma voix toggle -->
+          <div id="review-voice-row" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid #4ADE8033;background:#4ADE8008;margin-bottom:8px;cursor:pointer" onclick="toggleReviewVoice()">
+            <div id="review-voice-dot" style="width:9px;height:9px;border-radius:50%;background:#4ADE80;box-shadow:0 0 8px #4ADE8088;flex-shrink:0"></div>
+            <span style="font-size:13px;color:#4ADE80;flex:1">🎤 Ma voix</span>
+            <div id="review-voice-check" style="width:18px;height:18px;border-radius:4px;background:#4ADE80;border:2px solid #4ADE80;display:flex;align-items:center;justify-content:center;font-size:11px;color:#0a0a0f;flex-shrink:0">✓</div>
+          </div>
+
+          <!-- Volume ma voix -->
+          <div id="review-voice-vol-row" style="display:flex;align-items:center;gap:10px;padding:8px 12px;margin-bottom:8px">
+            <span style="font-size:11px;color:#555;width:64px;text-transform:uppercase;letter-spacing:0.08em">Vol. voix</span>
+            <input type="range" id="review-voice-vol" min="0" max="150" value="100"
+              style="flex:1;appearance:none;height:3px;background:linear-gradient(90deg,#4ADE80 66%,#2a2418 66%);border-radius:2px"
+              oninput="updateReviewVoiceVol(this.value)">
+            <span id="review-voice-vol-label" style="font-size:12px;color:#4ADE80;width:36px;text-align:right;font-variant-numeric:tabular-nums">100%</span>
+          </div>
+          <!-- Pistes individuelles -->
+          <div id="review-tracks-toggles"></div>
+
+          <canvas class="waveform" id="review-waveform" height="44" style="margin-top:12px"></canvas>
+          <div style="display:flex;justify-content:center;margin-top:12px">
+            <button class="icon-btn" id="review-play-btn" onclick="toggleReviewPlay()" style="width:50px;height:50px">▶</button>
+          </div>
+        </div>
+        <div class="grid2" style="margin-top:12px">
+          <button class="btn-lg btn-save" style="border:1px solid #2a4a2a" onclick="saveTake()">✓ &nbsp;Sauvegarder</button>
+          <button class="btn-lg btn-retry" style="border:1px solid #1e1c18" onclick="restartRecording()">↺ &nbsp;Recommencer</button>
+        </div>
+        <button class="btn-lg btn-delete" style="border:1px solid #1a1814" onclick="discardRecording()">✕ &nbsp;Supprimer</button>
+      </div>
+    </div>
+
+    <!-- ═══ TAKES TAB ═══════════════════════════════════════════════════════ -->
+    <div id="tab-takes" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="section-label" style="margin:0">Mes enregistrements</div>
+        <button onclick="showTab('record')" style="padding:6px 14px;background:#CC222218;border:1px solid #CC2222;border-radius:6px;color:#FF6644;font-size:11px;cursor:pointer;font-family:inherit">+ Nouvelle prise</button>
+      </div>
+      <div id="takes-list"></div>
+      <div id="takes-empty" style="text-align:center;padding:48px 20px;color:#333">
+        <div style="font-size:36px;margin-bottom:12px">♪</div>
+        <div style="font-size:13px;color:#444">Aucune prise pour le moment</div>
+        <div style="font-size:11px;color:#333;margin-top:6px">Enregistrez votre voix dans l'onglet Enregistrer</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="footer">
+    <span>Web Audio API · Enregistrement local · Aucune donnée envoyée</span>
+    <span>Chœur Studio v1.0</span>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const TRACKS = [
+  { id: "soprano", label: "Soprano", color: "#E8C547" },
+  { id: "alto",    label: "Alto",    color: "#E87B47" },
+  { id: "tenor",   label: "Ténor",   color: "#47A8E8" },
+  { id: "basse",   label: "Basse",   color: "#A847E8" },
+];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let ac = null;
+const trackData = {};       // { id: { buffer, volume, active, solo, name } }
+const sourceNodes = {};     // playing sources
+let isPlaying = false;
+let progress = 0;
+let duration = 0;
+let speed = 1;
+let loopActive = false;
+let loopA = 0.2, loopB = 0.7;
+let playStart = 0, playOffset = 0;
+let rafId = null;
+
+let recState = "idle";
+let mediaRec = null;
+let recChunks = [];
+let recBuffer = null;
+let recStart = 0;
+let recRaf = null;
+let micStream = null;
+let micAnalyser = null;
+let vuRaf = null;
+let reviewVoiceOn = true;
+let reviewTrackOn = {}; // per-track toggle in review
+
+function buildReviewTrackToggles() {
+  // init all tracks that were used as backing
+  TRACKS.forEach(t => {
+    if (reviewTrackOn[t.id] === undefined) reviewTrackOn[t.id] = selectedBacking[t.id];
+  });
+  const container = document.getElementById("review-tracks-toggles");
+  if (!container) return;
+  container.innerHTML = "";
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer || !selectedBacking[t.id]) return;
+    const on = reviewTrackOn[t.id];
+    const row = document.createElement("div");
+    row.style.cssText = `display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid ${on ? t.color+"33" : "#1e1c18"};background:${on ? t.color+"08" : "transparent"};margin-bottom:8px;cursor:pointer;transition:all 0.15s`;
+    row.innerHTML = `
+      <div style="width:9px;height:9px;border-radius:50%;background:${on ? t.color : "#333"};box-shadow:${on ? `0 0 8px ${t.color}88` : "none"};flex-shrink:0;transition:all 0.2s"></div>
+      <span style="font-size:13px;color:${on ? t.color : "#444"};flex:1">${t.label}</span>
+      <div style="width:18px;height:18px;border-radius:4px;background:${on ? t.color : "transparent"};border:2px solid ${on ? t.color : "#333"};display:flex;align-items:center;justify-content:center;font-size:11px;color:#0a0a0f;flex-shrink:0;transition:all 0.15s">${on ? "✓" : ""}</div>
+    `;
+    row.addEventListener("click", () => {
+      reviewTrackOn[t.id] = !reviewTrackOn[t.id];
+      stopReviewPlay();
+      buildReviewTrackToggles();
+      drawReviewWaveform();
+    });
+    container.appendChild(row);
+  });
+}
+
+function toggleReviewVoice() {
+  reviewVoiceOn = !reviewVoiceOn;
+  stopReviewPlay();
+  const dot = document.getElementById("review-voice-dot");
+  const check = document.getElementById("review-voice-check");
+  const row = document.getElementById("review-voice-row");
+  if (dot) dot.style.background = reviewVoiceOn ? "#4ADE80" : "#333";
+  if (dot) dot.style.boxShadow = reviewVoiceOn ? "0 0 8px #4ADE8088" : "none";
+  if (check) { check.style.background = reviewVoiceOn ? "#4ADE80" : "transparent"; check.style.borderColor = reviewVoiceOn ? "#4ADE80" : "#333"; check.textContent = reviewVoiceOn ? "✓" : ""; }
+  if (row) { row.style.borderColor = reviewVoiceOn ? "#4ADE8033" : "#1e1c18"; row.style.background = reviewVoiceOn ? "#4ADE8008" : "transparent"; }
+  drawReviewWaveform();
+}
+let reviewPlaying = false;
+let reviewSources = [];
+
+const takes = [];
+let playingTakeId = null;
+let takeSources = [];
+
+let selectedBacking = {};
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+TRACKS.forEach(t => {
+  trackData[t.id] = { buffer: null, volume: 0.8, active: true, solo: false, name: null };
+  selectedBacking[t.id] = true;
+});
+
+function getAC() {
+  if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  ["player","record","takes"].forEach(t => {
+    document.getElementById("tab-" + t).classList.toggle("hidden", t !== name);
+    document.querySelectorAll(".tab-btn")[["player","record","takes"].indexOf(t)].classList.toggle("active", t === name);
+  });
+  if (name === "record") buildBackingRows();
+}
+
+// ─── UPLOAD ──────────────────────────────────────────────────────────────────
+function buildUploadRows() {
+  const container = document.getElementById("upload-rows");
+  container.innerHTML = "";
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    const row = document.createElement("label");
+    row.className = "upload-row" + (td.buffer ? " loaded" : "");
+    row.style.borderColor = td.buffer ? t.color : "#2a2418";
+    row.style.background = td.buffer ? `${t.color}08` : "transparent";
+    row.innerHTML = `
+      <input type="file" accept="audio/*" style="display:none" data-id="${t.id}">
+      <div class="track-dot" style="background:${td.buffer ? t.color : "#333"};box-shadow:${td.buffer ? `0 0 8px ${t.color}88` : "none"}"></div>
+      <span style="font-size:13px;color:${td.buffer ? t.color : "#555"};flex:1">${t.label}</span>
+      <span style="font-size:11px;color:#666;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${td.buffer ? td.name : "Cliquer pour charger →"}</span>
+    `;
+    row.querySelector("input").addEventListener("change", async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const aac = getAC();
+      const ab = await file.arrayBuffer();
+      const buf = await aac.decodeAudioData(ab);
+      trackData[t.id].buffer = buf;
+      trackData[t.id].name = file.name;
+      if (buf.duration > duration) { duration = buf.duration; document.getElementById("time-total").textContent = fmt(duration); }
+      buildUploadRows();
+      buildWaveforms();
+      buildMixer();
+      updateStatus();
+      document.getElementById("player-main").classList.toggle("hidden", !hasAnyTrack());
+      document.getElementById("empty-state").classList.toggle("hidden", hasAnyTrack());
+    });
+    container.appendChild(row);
+  });
+}
+
+function hasAnyTrack() { return TRACKS.some(t => trackData[t.id].buffer); }
+
+function updateStatus() {
+  const n = TRACKS.filter(t => trackData[t.id].buffer).length;
+  document.getElementById("status").innerHTML = n > 0
+    ? `<span style="color:#4ADE8088">● ${n} piste(s) chargée(s)</span>`
+    : "Aucune piste chargée";
+}
+
+// ─── WAVEFORMS ───────────────────────────────────────────────────────────────
+function buildWaveforms() {
+  const container = document.getElementById("waveforms");
+  container.innerHTML = "";
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer) return;
+    const wrap = document.createElement("div");
+    wrap.style.cssText = `margin-bottom:6px;opacity:${td.active ? 1 : 0.3}`;
+    wrap.id = `wf-wrap-${t.id}`;
+    const label = document.createElement("div");
+    label.style.cssText = `font-size:11px;color:${t.color};margin-bottom:3px;letter-spacing:0.05em`;
+    label.textContent = t.label;
+    const canvas = document.createElement("canvas");
+    canvas.className = "waveform";
+    canvas.id = `wf-${t.id}`;
+    canvas.height = 36;
+    canvas.addEventListener("click", e => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      handleSeek(null, (e.clientX - rect.left) / rect.width);
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(canvas);
+    container.appendChild(wrap);
+    setTimeout(() => drawWaveform(t.id), 50);
+  });
+}
+
+function drawWaveform(id) {
+  const td = trackData[id];
+  const t = TRACKS.find(x => x.id === id);
+  const canvas = document.getElementById(`wf-${id}`);
+  if (!canvas || !td.buffer) return;
+  const W = canvas.offsetWidth || 560;
+  canvas.width = W;
+  const ctx = canvas.getContext("2d");
+  const data = td.buffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+  const H = canvas.height, mid = H / 2;
+  ctx.clearRect(0, 0, W, H);
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    for (let j = 0; j < step; j++) max = Math.max(max, Math.abs(data[x * step + j] || 0));
+    const h = max * mid * 0.9 || 2;
+    ctx.fillStyle = (x / W < progress) ? t.color : `${t.color}44`;
+    ctx.fillRect(x, mid - h, 1, h * 2);
+  }
+  // playhead
+  const px = progress * W;
+  ctx.fillStyle = "#ffffff88";
+  ctx.fillRect(px - 1, 0, 2, H);
+  // markers
+  drawMarkersOnCanvas(canvas);
+}
+
+function redrawAllWaveforms() {
+  TRACKS.forEach(t => { if (trackData[t.id].buffer) drawWaveform(t.id); });
+}
+
+// ─── MIXER ───────────────────────────────────────────────────────────────────
+function buildMixer() {
+  const container = document.getElementById("mixer-rows");
+  container.innerHTML = "";
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer) return;
+    const row = document.createElement("div");
+    row.className = "track-row card-accent";
+    row.id = `mixer-${t.id}`;
+    row.style.borderColor = td.active ? `${t.color}22` : "#1e1c18";
+    row.style.background = td.active ? `${t.color}08` : "transparent";
+    row.innerHTML = `
+      <div class="track-dot" style="background:${td.active ? t.color : "#333"};box-shadow:${td.active ? `0 0 8px ${t.color}88` : "none"}"></div>
+      <span style="font-size:13px;color:${td.active ? t.color : "#444"};width:58px">${t.label}</span>
+      <input type="range" min="0" max="100" value="${Math.round(td.volume*100)}"
+        style="flex:1;appearance:none;height:3px;background:linear-gradient(90deg,${t.color} ${td.volume*100}%,#2a2418 ${td.volume*100}%);border-radius:2px"
+        ${td.active ? "" : "disabled"}
+        oninput="setVolume('${t.id}', this.value/100, this)">
+      <span style="font-size:11px;color:#555;width:32px;text-align:right;font-variant-numeric:tabular-nums" id="vol-label-${t.id}">${Math.round(td.volume*100)}</span>
+      <button class="mini-btn ${td.solo ? 's-active' : ''}" onclick="toggleSolo('${t.id}')">S</button>
+      <button class="mini-btn ${!td.active ? 'm-active' : ''}" onclick="toggleMute('${t.id}')">M</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function setVolume(id, val, input) {
+  trackData[id].volume = val;
+  document.getElementById(`vol-label-${id}`).textContent = Math.round(val * 100);
+  const t = TRACKS.find(x => x.id === id);
+  input.style.background = `linear-gradient(90deg,${t.color} ${val*100}%,#2a2418 ${val*100}%)`;
+}
+
+function toggleSolo(id) {
+  trackData[id].solo = !trackData[id].solo;
+  buildMixer();
+}
+
+function toggleMute(id) {
+  trackData[id].active = !trackData[id].active;
+  const wrap = document.getElementById(`wf-wrap-${id}`);
+  if (wrap) wrap.style.opacity = trackData[id].active ? "1" : "0.3";
+  buildMixer();
+}
+
+// ─── PLAYBACK ─────────────────────────────────────────────────────────────────
+function stopAll() {
+  Object.values(sourceNodes).forEach(s => { try { s.stop(); } catch(e){} });
+  Object.keys(sourceNodes).forEach(k => delete sourceNodes[k]);
+  cancelAnimationFrame(rafId);
+  isPlaying = false;
+  document.getElementById("play-btn").textContent = "▶";
+}
+
+function startPlay(fromP) {
+  const aac = getAC();
+  stopAll();
+  if (fromP !== undefined) progress = fromP;
+  const startOffset = progress * duration;
+  const loopStart = loopA * duration, loopEnd = loopB * duration;
+
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer || !td.active) return;
+    const gain = aac.createGain();
+    gain.gain.value = td.volume;
+    const src = aac.createBufferSource();
+    src.buffer = td.buffer;
+    src.playbackRate.value = speed;
+    if (loopActive) { src.loop = true; src.loopStart = loopStart; src.loopEnd = loopEnd; }
+    src.connect(gain).connect(aac.destination);
+    src.start(0, startOffset);
+    sourceNodes[t.id] = src;
+  });
+
+  playStart = aac.currentTime;
+  playOffset = startOffset;
+  isPlaying = true;
+  document.getElementById("play-btn").textContent = "⏸";
+
+  function tick() {
+    const elapsed = (aac.currentTime - playStart) * speed;
+    const current = playOffset + elapsed;
+    if (loopActive) {
+      const loopDur = loopEnd - loopStart;
+      const le = ((current - loopStart) % loopDur + loopDur) % loopDur;
+      progress = (loopStart + le) / duration;
+    } else {
+      progress = Math.min(1, current / duration);
+      if (progress >= 1) { stopAll(); return; }
+    }
+    updateProgressUI();
+    rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function togglePlay() {
+  if (!hasAnyTrack()) return;
+  if (isPlaying) { stopAll(); playOffset = progress * duration; }
+  else startPlay();
+}
+
+function handleSeek(e, p) {
+  if (e) {
+    const rect = document.getElementById("seek-bar").getBoundingClientRect();
+    p = (e.clientX - rect.left) / rect.width;
+  }
+  progress = Math.max(0, Math.min(1, p));
+  if (isPlaying) { stopAll(); setTimeout(() => startPlay(), 10); }
+  else { playOffset = progress * duration; updateProgressUI(); }
+}
+
+function seekRel(delta) { handleSeek(null, progress + delta); }
+
+function updateProgressUI() {
+  const pct = `${progress * 100}%`;
+  document.getElementById("prog-fill").style.width = pct;
+  document.getElementById("time-current").textContent = fmt(progress * duration);
+  updateTimecode();
+  redrawAllWaveforms();
+}
+
+// ─── SPEED ───────────────────────────────────────────────────────────────────
+function updateSpeed(val) {
+  speed = val / 100;
+  document.getElementById("speed-val").textContent = val + "%";
+  const pct = ((val - 50) / 100) * 100;
+  document.getElementById("speed-slider").style.background =
+    `linear-gradient(90deg,#E8C547 ${pct}%,#2a2418 ${pct}%)`;
+  if (isPlaying) { stopAll(); setTimeout(() => startPlay(), 10); }
+}
+
+// ─── LOOP ─────────────────────────────────────────────────────────────────────
+function toggleLoop() {
+  loopActive = !loopActive;
+  document.getElementById("loop-btn").classList.toggle("active", loopActive);
+  document.getElementById("loop-panel").classList.toggle("hidden", !loopActive);
+}
+function updateLoopA(v) {
+  loopA = v / 100;
+  const pct = v + "%";
+  document.getElementById("loop-a-slider").style.background = `linear-gradient(90deg,#E8C547 ${pct},#2a2418 ${pct})`;
+  document.getElementById("loop-a-time").textContent = fmt(loopA * duration);
+}
+function updateLoopB(v) {
+  loopB = v / 100;
+  const pct = v + "%";
+  document.getElementById("loop-b-slider").style.background = `linear-gradient(90deg,#E8C547 ${pct},#2a2418 ${pct})`;
+  document.getElementById("loop-b-time").textContent = fmt(loopB * duration);
+}
+
+// ─── RECORDING ───────────────────────────────────────────────────────────────
+function buildBackingRows() {
+  const container = document.getElementById("backing-rows");
+  container.innerHTML = "";
+  const anyTrack = hasAnyTrack();
+  document.getElementById("no-tracks-warning").classList.toggle("hidden", anyTrack);
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer) return;
+    const sel = selectedBacking[t.id];
+    const row = document.createElement("div");
+    row.className = "card" + (sel ? " card-accent" : "");
+    row.style.cssText = `display:flex;align-items:center;gap:12px;cursor:pointer;padding:12px 14px;border-color:${sel ? `${t.color}22` : "#1e1c18"};background:${sel ? `${t.color}08` : "#12100a"}`;
+    row.innerHTML = `
+      <div style="width:18px;height:18px;border-radius:4px;background:${sel ? t.color : "transparent"};border:2px solid ${sel ? t.color : "#333"};display:flex;align-items:center;justify-content:center;font-size:11px;color:#0a0a0f;flex-shrink:0;transition:all 0.15s">${sel ? "✓" : ""}</div>
+      <div class="track-dot" style="background:${sel ? t.color : "#333"};box-shadow:${sel ? `0 0 8px ${t.color}88` : "none"}"></div>
+      <span style="font-size:13px;color:${sel ? t.color : "#444"}">${t.label}</span>
+    `;
+    row.addEventListener("click", () => {
+      selectedBacking[t.id] = !selectedBacking[t.id];
+      buildBackingRows();
+    });
+    container.appendChild(row);
+  });
+}
+
+async function startCountdown() {
+  recState = "countdown";
+  document.getElementById("rec-idle").classList.add("hidden");
+  document.getElementById("rec-countdown").classList.remove("hidden");
+  let c = 3;
+  document.getElementById("countdown-num").textContent = c;
+  const interval = setInterval(() => {
+    c--;
+    const el = document.getElementById("countdown-num");
+    el.style.animation = "none";
+    el.offsetHeight; // reflow
+    el.style.animation = "cdPop 1s ease-out";
+    el.textContent = c > 0 ? c : "GO !";
+    if (c <= 0) {
+      clearInterval(interval);
+      setTimeout(() => {
+        document.getElementById("rec-countdown").classList.add("hidden");
+        document.getElementById("rec-recording").classList.remove("hidden");
+        startActualRecording();
+      }, 600);
+    }
+  }, 1000);
+}
+
+async function startActualRecording() {
+  const aac = getAC();
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch(e) {
+    alert("❌ Accès microphone refusé : " + e.message + "\n\nAssurez-vous d'ouvrir ce fichier via un serveur local ou avec le protocole file://");
+    restartRecording();
+    return;
+  }
+
+  // VU meter
+  micAnalyser = aac.createAnalyser();
+  micAnalyser.fftSize = 256;
+  const micSrc = aac.createMediaStreamSource(micStream);
+  micSrc.connect(micAnalyser);
+  startVU("vu-recording");
+
+  // Backing tracks
+  stopAll();
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer || !selectedBacking[t.id]) return;
+    const g = aac.createGain(); g.gain.value = td.volume;
+    const s = aac.createBufferSource(); s.buffer = td.buffer;
+    s.playbackRate.value = speed;
+    s.connect(g).connect(aac.destination); s.start(0);
+    sourceNodes[t.id] = s;
+  });
+
+  // MediaRecorder
+  recChunks = [];
+  mediaRec = new MediaRecorder(micStream);
+  mediaRec.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data); };
+  mediaRec.onstop = async () => {
+    const blob = new Blob(recChunks, { type: "audio/webm" });
+    const ab = await blob.arrayBuffer();
+    try {
+      recBuffer = await aac.decodeAudioData(ab);
+    } catch(e) {
+      // fallback WAV
+      recBuffer = null;
+    }
+    micStream.getTracks().forEach(t => t.stop());
+    stopVU();
+    micAnalyser = null;
+    showReview();
+  };
+  mediaRec.start(100);
+  recStart = aac.currentTime;
+  recState = "recording";
+
+  // Progress
+  function tick() {
+    const elapsed = aac.currentTime - recStart;
+    const p = duration > 0 ? Math.min(1, elapsed / duration) : Math.min(1, elapsed / 120);
+    document.getElementById("rec-time").textContent = fmt(elapsed);
+    document.getElementById("rec-prog-bar").style.width = (p * 100) + "%";
+    if (p < 1) recRaf = requestAnimationFrame(tick);
+    else stopRecording();
+  }
+  recRaf = requestAnimationFrame(tick);
+}
+
+function stopRecording() {
+  cancelAnimationFrame(recRaf);
+  stopAll();
+  if (mediaRec && mediaRec.state !== "inactive") mediaRec.stop();
+}
+
+function showReview() {
+  document.getElementById("rec-recording").classList.add("hidden");
+  document.getElementById("rec-review").classList.remove("hidden");
+  // init review toggles — all backing tracks ON by default, voice ON
+  reviewVoiceOn = true;
+  TRACKS.forEach(t => { reviewTrackOn[t.id] = selectedBacking[t.id] && !!trackData[t.id].buffer; });
+  buildReviewTrackToggles();
+  // reset voice volume
+  reviewVoiceVol = 1.0;
+  const volInput = document.getElementById("review-voice-vol");
+  if (volInput) { volInput.value = 100; updateReviewVoiceVol(100); }
+  reviewVoiceGainNode = null;
+  // reset voice toggle UI
+  const dot = document.getElementById("review-voice-dot");
+  const check = document.getElementById("review-voice-check");
+  const row = document.getElementById("review-voice-row");
+  if (dot) { dot.style.background = "#4ADE80"; dot.style.boxShadow = "0 0 8px #4ADE8088"; }
+  if (check) { check.style.background = "#4ADE80"; check.style.borderColor = "#4ADE80"; check.textContent = "✓"; }
+  if (row) { row.style.borderColor = "#4ADE8033"; row.style.background = "#4ADE8008"; }
+  if (recBuffer) {
+    document.getElementById("rec-duration-label").textContent = `✓ Enregistrement capturé — ${fmt(recBuffer.duration)}`;
+    setTimeout(() => drawReviewWaveform(), 50);
+  }
+}
+
+function drawReviewWaveform() {
+  if (!recBuffer) return;
+  const canvas = document.getElementById("review-waveform");
+  if (!canvas) return;
+  const W = canvas.offsetWidth || 560;
+  canvas.width = W;
+  const H = canvas.height;
+  const ctx = canvas.getContext("2d");
+  const data = recBuffer.getChannelData(0);
+  const step = Math.ceil(data.length / W);
+  const mid = H / 2;
+  // Color reflects what's active
+  const anyBackingOn = TRACKS.some(t => reviewTrackOn[t.id]);
+  const color = reviewVoiceOn && anyBackingOn ? "#E8C547" : reviewVoiceOn ? "#4ADE80" : "#47A8E8";
+  for (let x = 0; x < W; x++) {
+    let max = 0;
+    for (let j = 0; j < step; j++) max = Math.max(max, Math.abs(data[x * step + j] || 0));
+    const h = max * mid * 0.9 || 2;
+    ctx.fillStyle = `${color}88`;
+    ctx.fillRect(x, mid - h, 1, h * 2);
+  }
+}
+
+function toggleReviewPlay() {
+  if (reviewPlaying) stopReviewPlay();
+  else startReviewPlay();
+}
+
+function startReviewPlay() {
+  if (!recBuffer) return;
+  const aac = getAC();
+  stopReviewPlay();
+  // Voice with volume control
+  reviewVoiceGainNode = null;
+  if (reviewVoiceOn) {
+    const vSrc = aac.createBufferSource();
+    vSrc.buffer = recBuffer;
+    const vGain = aac.createGain();
+    vGain.gain.value = reviewVoiceVol;
+    reviewVoiceGainNode = vGain;
+    vSrc.connect(vGain).connect(aac.destination);
+    vSrc.start(0);
+    vSrc.onended = () => { reviewPlaying = false; document.getElementById("review-play-btn").textContent = "▶"; reviewVoiceGainNode = null; };
+    reviewSources.push(vSrc);
+  }
+  // Selected backing tracks
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer || !reviewTrackOn[t.id]) return;
+    const g = aac.createGain(); g.gain.value = td.volume;
+    const s = aac.createBufferSource(); s.buffer = td.buffer;
+    s.connect(g).connect(aac.destination); s.start(0);
+    reviewSources.push(s);
+  });
+  if (reviewSources.length === 0) return;
+  reviewPlaying = true;
+  document.getElementById("review-play-btn").textContent = "⏸";
+}
+
+function stopReviewPlay() {
+  reviewSources.forEach(s => { try { s.stop(); } catch(e){} });
+  reviewSources = [];
+  reviewPlaying = false;
+  const btn = document.getElementById("review-play-btn");
+  if (btn) btn.textContent = "▶";
+}
+
+function saveTake() {
+  if (!recBuffer) return;
+  const take = {
+    id: Date.now(), buffer: recBuffer,
+    backingSnapshot: { ...selectedBacking },
+    reviewSnapshot: { ...reviewTrackOn },
+    voiceOn: reviewVoiceOn,
+    voiceVol: reviewVoiceVol,
+    name: `Prise ${takes.length + 1}`,
+    date: new Date().toLocaleDateString("fr-FR"),
+    duration: fmt(recBuffer.duration),
+    favorite: false,
+  };
+  takes.unshift(take);
+  stopReviewPlay();
+  recBuffer = null;
+  recState = "idle";
+  document.getElementById("rec-review").classList.add("hidden");
+  document.getElementById("rec-idle").classList.remove("hidden");
+  updateTakesCount();
+  showTab("takes");
+}
+
+function restartRecording() {
+  stopReviewPlay();
+  recBuffer = null;
+  recState = "idle";
+  document.getElementById("rec-recording").classList.add("hidden");
+  document.getElementById("rec-review").classList.add("hidden");
+  document.getElementById("rec-countdown").classList.add("hidden");
+  document.getElementById("rec-idle").classList.remove("hidden");
+}
+
+function discardRecording() {
+  stopReviewPlay();
+  recBuffer = null;
+  restartRecording();
+}
+
+// ─── VU METER ────────────────────────────────────────────────────────────────
+function startVU(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container || !micAnalyser) return;
+  container.innerHTML = "";
+  const bars = Array.from({ length: 10 }, () => {
+    const b = document.createElement("div");
+    b.className = "vu-bar";
+    b.style.cssText = "background:#4ADE80;height:10%";
+    container.appendChild(b);
+    return b;
+  });
+  const data = new Uint8Array(micAnalyser.frequencyBinCount);
+  function tick() {
+    if (!micAnalyser) return;
+    micAnalyser.getByteFrequencyData(data);
+    const step = Math.floor(data.length / 10);
+    bars.forEach((b, i) => {
+      const v = data[i * step] / 255;
+      b.style.height = Math.max(8, v * 100) + "%";
+      b.style.background = v > 0.8 ? "#FF4444" : v > 0.5 ? "#E8C547" : "#4ADE80";
+      b.style.boxShadow = v > 0.4 ? `0 0 5px ${v > 0.8 ? "#FF4444" : "#4ADE80"}88` : "none";
+    });
+    vuRaf = requestAnimationFrame(tick);
+  }
+  vuRaf = requestAnimationFrame(tick);
+}
+
+function stopVU() {
+  cancelAnimationFrame(vuRaf);
+}
+
+// ─── TAKES ───────────────────────────────────────────────────────────────────
+function updateTakesCount() {
+  document.getElementById("takes-tab-btn").textContent = `◈  Prises (${takes.length})`;
+  renderTakes();
+}
+
+function renderTakes() {
+  const list = document.getElementById("takes-list");
+  const empty = document.getElementById("takes-empty");
+  list.innerHTML = "";
+  empty.classList.toggle("hidden", takes.length > 0);
+  takes.forEach(take => {
+    const card = document.createElement("div");
+    card.className = "take-card" + (playingTakeId === take.id ? " playing" : "");
+    card.id = `take-${take.id}`;
+    const backingBadges = TRACKS.filter(t => take.backingSnapshot[t.id] && trackData[t.id].buffer)
+      .map(t => `<span class="badge" style="background:${t.color}18;border:1px solid ${t.color}33;color:${t.color}">${t.label}</span>`).join("");
+    card.innerHTML = `
+      <div class="take-play-btn ${playingTakeId === take.id ? "active" : ""}" id="take-play-${take.id}">
+        ${playingTakeId === take.id ? "⏸" : "▶"}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;color:#E8E0D0;margin-bottom:2px">
+          ${take.favorite ? '<span style="color:#E8C547">★ </span>' : ""}${take.name}
+        </div>
+        <div style="font-size:11px;color:#555">${take.date} · ${take.duration}</div>
+        <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${backingBadges}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+        <button onclick="toggleFavorite(${take.id})" style="background:transparent;border:none;color:${take.favorite ? "#E8C547" : "#333"};cursor:pointer;font-size:18px" title="Favori">★</button>
+        <button onclick="renameTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:13px" title="Renommer">✏</button>
+        <button onclick="downloadTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:14px" title="Télécharger mix WAV">⬇</button>
+        <button onclick="deleteTake(${take.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:13px" title="Supprimer">✕</button>
+      </div>
+    `;
+    card.addEventListener("click", e => {
+      if (e.target.tagName === "BUTTON") return;
+      playTake(take);
+    });
+    list.appendChild(card);
+  });
+}
+
+function playTake(take) {
+  if (playingTakeId === take.id) {
+    takeSources.forEach(s => { try { s.stop(); } catch(e){} });
+    takeSources = [];
+    playingTakeId = null;
+    renderTakes();
+    return;
+  }
+  takeSources.forEach(s => { try { s.stop(); } catch(e){} });
+  takeSources = [];
+  const aac = getAC();
+  // Voice (only if voiceOn was true when saved, default true for old takes)
+  const voiceOn = take.voiceOn !== false;
+  if (voiceOn) {
+    const vSrc = aac.createBufferSource();
+    vSrc.buffer = take.buffer;
+    const vGain = aac.createGain();
+    vGain.gain.value = take.voiceVol !== undefined ? take.voiceVol : 1.0;
+    vSrc.connect(vGain).connect(aac.destination);
+    vSrc.start(0);
+    vSrc.onended = () => { playingTakeId = null; renderTakes(); };
+    takeSources.push(vSrc);
+  }
+  // Backing tracks: use reviewSnapshot (what was active at save time), fallback to backingSnapshot
+  const snap = take.reviewSnapshot || take.backingSnapshot;
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer || !snap[t.id]) return;
+    const g = aac.createGain(); g.gain.value = td.volume;
+    const s = aac.createBufferSource(); s.buffer = td.buffer;
+    s.connect(g).connect(aac.destination); s.start(0);
+    takeSources.push(s);
+  });
+  playingTakeId = take.id;
+  renderTakes();
+}
+
+function toggleFavorite(id) {
+  const take = takes.find(t => t.id === id);
+  if (take) { take.favorite = !take.favorite; renderTakes(); }
+}
+
+async function downloadTake(id) {
+  const take = takes.find(t => t.id === id);
+  if (!take || !take.buffer) return;
+  const aac = getAC();
+  const len = take.buffer.length;
+  const sr = take.buffer.sampleRate;
+  const offline = new OfflineAudioContext(2, len, sr);
+  // Voice
+  const dlVoiceOn = take.voiceOn !== false;
+  if (dlVoiceOn) {
+    const vSrc = offline.createBufferSource();
+    vSrc.buffer = take.buffer;
+    const vGain = offline.createGain();
+    vGain.gain.value = take.voiceVol !== undefined ? take.voiceVol : 1.0;
+    vSrc.connect(vGain).connect(offline.destination);
+    vSrc.start(0);
+  }
+  // Backing: use reviewSnapshot at save time
+  const dlSnap = take.reviewSnapshot || take.backingSnapshot;
+  TRACKS.forEach(t => {
+    const td = trackData[t.id];
+    if (!td.buffer || !dlSnap[t.id]) return;
+    const g = offline.createGain(); g.gain.value = td.volume;
+    const s = offline.createBufferSource(); s.buffer = td.buffer;
+    s.connect(g).connect(offline.destination); s.start(0);
+  });
+  const rendered = await offline.startRendering();
+  const wav = toWav(rendered);
+  const blob = new Blob([wav], { type: "audio/wav" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `${take.name}.wav`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function deleteTake(id) {
+  const i = takes.findIndex(t => t.id === id);
+  if (i > -1) {
+    if (playingTakeId === id) { takeSources.forEach(s => { try { s.stop(); } catch(e){} }); takeSources = []; playingTakeId = null; }
+    takes.splice(i, 1);
+    updateTakesCount();
+  }
+}
+
+// ─── WAV ENCODER ─────────────────────────────────────────────────────────────
+function toWav(buf) {
+  const nCh = buf.numberOfChannels, sr = buf.sampleRate, nF = buf.length;
+  const bps = 2, ba = nCh * bps, byteRate = sr * ba, dataSize = nF * ba;
+  const ab = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(ab);
+  const ws = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+  ws(0,"RIFF"); v.setUint32(4,36+dataSize,true); ws(8,"WAVE"); ws(12,"fmt ");
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,nCh,true);
+  v.setUint32(24,sr,true); v.setUint32(28,byteRate,true); v.setUint16(32,ba,true);
+  v.setUint16(34,16,true); ws(36,"data"); v.setUint32(40,dataSize,true);
+  let off = 44;
+  for (let i = 0; i < nF; i++) for (let ch = 0; ch < nCh; ch++) {
+    const s = Math.max(-1, Math.min(1, buf.getChannelData(Math.min(ch, buf.numberOfChannels-1))[i]||0));
+    v.setInt16(off, s < 0 ? s*0x8000 : s*0x7FFF, true); off += 2;
+  }
+  return ab;
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+
+// ─── TIMECODE ─────────────────────────────────────────────────────────────────
+function fmtTimecode(s) {
+  s = Math.max(0, s || 0);
+  const min = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  const ms = Math.floor((s % 1) * 1000);
+  return `${String(min).padStart(2,"0")}:${String(sec).padStart(2,"0")}:${String(ms).padStart(3,"0")}`;
+}
+
+function updateTimecode() {
+  const el = document.getElementById("timecode-display");
+  if (el) el.textContent = fmtTimecode(progress * duration);
+}
+
+// ─── MARKERS ──────────────────────────────────────────────────────────────────
+let markers = []; // { id, time, note }
+
+function addMarker() {
+  const note = prompt("Note pour ce marqueur (optionnel) :", "");
+  if (note === null) return; // cancelled
+  markers.push({ id: Date.now(), time: progress * duration, note: note.trim() });
+  markers.sort((a, b) => a.time - b.time);
+  renderMarkers();
+  redrawAllWaveforms();
+}
+
+function deleteMarker(id) {
+  markers = markers.filter(m => m.id !== id);
+  renderMarkers();
+  redrawAllWaveforms();
+}
+
+function editMarkerNote(id) {
+  const m = markers.find(x => x.id === id);
+  if (!m) return;
+  const note = prompt("Modifier la note :", m.note);
+  if (note === null) return;
+  m.note = note.trim();
+  renderMarkers();
+}
+
+function seekToMarker(time) {
+  handleSeek(null, time / duration);
+}
+
+function renderMarkers() {
+  const container = document.getElementById("markers-list");
+  if (!container) return;
+  if (markers.length === 0) {
+    container.innerHTML = '<div style="font-size:11px;color:#333;padding:6px 0">Aucun marqueur — cliquez "+ Ajouter ici" pendant la lecture</div>';
+    return;
+  }
+  container.innerHTML = markers.map(m => `
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#1a1610;border:1px solid #2a2010;border-radius:8px;margin-bottom:5px">
+      <div onclick="seekToMarker(${m.time})" style="cursor:pointer;color:#E8C547;font-size:11px;font-variant-numeric:tabular-nums;width:52px;flex-shrink:0">${fmtTimecode(m.time)}</div>
+      <div style="width:1px;height:14px;background:#2a2418;flex-shrink:0"></div>
+      <div style="flex:1;font-size:12px;color:#aaa;cursor:pointer" onclick="seekToMarker(${m.time})">${m.note || '<span style="color:#444;font-style:italic">Pas de note</span>'}</div>
+      <button onclick="editMarkerNote(${m.id})" style="background:transparent;border:none;color:#555;cursor:pointer;font-size:12px" title="Modifier">✏</button>
+      <button onclick="deleteMarker(${m.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:12px" title="Supprimer">✕</button>
+    </div>
+  `).join("");
+}
+
+// Draw markers on waveform canvas
+function drawMarkersOnCanvas(canvas) {
+  if (!canvas || markers.length === 0 || duration === 0) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  markers.forEach(m => {
+    const x = Math.round((m.time / duration) * W);
+    ctx.fillStyle = "#E8C547";
+    ctx.fillRect(x - 1, 0, 2, H);
+    // Diamond marker
+    ctx.beginPath();
+    ctx.moveTo(x, 2); ctx.lineTo(x + 5, 7); ctx.lineTo(x, 12); ctx.lineTo(x - 5, 7);
+    ctx.closePath(); ctx.fill();
+    // Note label
+    if (m.note) {
+      ctx.fillStyle = "#E8C54799";
+      ctx.font = "9px monospace";
+      ctx.fillText(m.note.substring(0, 16), Math.min(x + 7, W - 80), 10);
+    }
+  });
+}
+
+// ─── VOICE VOLUME IN REVIEW ───────────────────────────────────────────────────
+let reviewVoiceVol = 1.0;
+
+function updateReviewVoiceVol(val) {
+  reviewVoiceVol = val / 100;
+  const pct = (val / 150) * 100;
+  const input = document.getElementById("review-voice-vol");
+  if (input) input.style.background = `linear-gradient(90deg,#4ADE80 ${pct}%,#2a2418 ${pct}%)`;
+  const label = document.getElementById("review-voice-vol-label");
+  if (label) label.textContent = val + "%";
+  // Live update if playing
+  if (reviewVoiceGainNode) reviewVoiceGainNode.gain.value = reviewVoiceVol;
+}
+
+let reviewVoiceGainNode = null;
+
+// ─── RENAME TAKE ──────────────────────────────────────────────────────────────
+function renameTake(id) {
+  const take = takes.find(t => t.id === id);
+  if (!take) return;
+  const newName = prompt("Nouveau nom pour cette prise :", take.name);
+  if (newName === null || newName.trim() === "") return;
+  take.name = newName.trim();
+  renderTakes();
+}
+
+function fmt(s) {
+  s = Math.max(0, s || 0);
+  return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+buildUploadRows();
+document.getElementById("player-main").classList.add("hidden");
+renderMarkers();
+</script>
+</body>
+</html>
