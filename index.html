@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chœur Studio</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -89,12 +91,19 @@
   #countdown-num { font-size: 96px; color: #E8C547; font-style: italic; text-shadow: 0 0 60px #E8C54788; text-align: center; animation: cdPop 1s ease-out; }
 
   /* Takes */
-  .take-card { background: #12100a; border: 1px solid #1e1c18; border-radius: 12px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 12px; }
+  .take-card { background: #12100a; border: 1px solid #1e1c18; border-radius: 12px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; gap: 0; }
   .take-card:hover { border-color: #2a2418; }
   .take-card.playing { border-color: rgba(232,197,71,0.3); background: rgba(232,197,71,0.03); }
+  .take-main-row { display: flex; align-items: center; gap: 12px; width: 100%; }
   .take-play-btn { width: 38px; height: 38px; border-radius: 50%; background: #1a1814; border: 1px solid #2a2418; color: #666; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; transition: all 0.15s; }
   .take-play-btn.active { background: linear-gradient(135deg,#E8C547,#B8962A); border: none; color: #0a0a0f; }
   .badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; }
+  .take-comments-section { margin-top: 10px; border-top: 1px solid #1e1c18; padding-top: 8px; }
+  .take-comments-toggle { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 2px 0; user-select: none; }
+  .take-comments-toggle:hover span { color: #777 !important; }
+  .take-comment-item { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #0e0c08; border: 1px solid #1e1c18; border-radius: 6px; margin-top: 5px; }
+  .take-comment-add-btn { margin-top: 6px; background: transparent; border: 1px dashed #2a2418; border-radius: 6px; color: #555; font-size: 11px; font-family: inherit; cursor: pointer; padding: 5px 10px; width: 100%; text-align: left; transition: all 0.15s; }
+  .take-comment-add-btn:hover { border-color: #E8C54755; color: #E8C547; }
 
   /* Progress bar */
   .prog-container { height: 4px; background: #1e1c18; border-radius: 2px; cursor: pointer; position: relative; margin: 8px 0; }
@@ -118,9 +127,48 @@
   /* Hidden */
   .hidden { display: none !important; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* Auth overlay */
+  #auth-overlay { position: fixed; inset: 0; background: #080812; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+  .auth-box { width: 340px; padding: 32px; background: #12100a; border: 1px solid #2a2418; border-radius: 16px; }
+  .auth-field { width: 100%; padding: 10px 14px; background: #0e0c08; border: 1px solid #1e1c18; border-radius: 8px; color: #E8E0D0; font-family: inherit; font-size: 14px; margin-bottom: 10px; outline: none; transition: border-color 0.2s; }
+  .auth-field:focus { border-color: #E8C54744; }
+  #auth-error { font-size: 12px; color: #FF4444; margin-bottom: 10px; min-height: 16px; }
+
+  /* User badge */
+  #user-badge { display: flex; align-items: center; gap: 8px; }
+  .role-pill { font-size: 9px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.1em; font-family: inherit; }
+  .role-pill.admin { background: #E8C54722; border: 1px solid #E8C54744; color: #E8C547; }
+  .role-pill.choriste { background: #4ADE8022; border: 1px solid #4ADE8044; color: #4ADE80; }
+
+  /* Loading spinner */
+  @keyframes spinSm { to { transform: rotate(360deg); } }
+  .spin-sm { display: inline-block; width: 12px; height: 12px; border: 2px solid #2a2418; border-top-color: #E8C547; border-radius: 50%; animation: spinSm 0.7s linear infinite; vertical-align: middle; margin-right: 4px; }
+
+  /* Admin panel */
+  .admin-user-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #12100a; border: 1px solid #1e1c18; border-radius: 10px; margin-bottom: 8px; }
 </style>
 </head>
 <body>
+
+<!-- ═══ LOGIN OVERLAY ═══════════════════════════════════════════════════════ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="width:48px;height:48px;border-radius:50%;background:radial-gradient(#E8C547,#B8962A);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 12px;box-shadow:0 0 20px #E8C54744">♪</div>
+      <div style="font-size:18px;color:#E8C547;letter-spacing:0.04em">Chœur Studio</div>
+      <div style="font-size:10px;color:#555;margin-top:4px;letter-spacing:0.14em;text-transform:uppercase">Connexion requise</div>
+    </div>
+    <div id="auth-error"></div>
+    <input id="auth-email"    class="auth-field" type="email"    placeholder="Adresse e-mail"  autocomplete="email">
+    <input id="auth-password" class="auth-field" type="password" placeholder="Mot de passe"    autocomplete="current-password"
+      onkeydown="if(event.key==='Enter') doLogin()">
+    <button id="auth-btn" class="btn-lg" style="background:linear-gradient(135deg,#E8C547,#B8962A);color:#0a0a0f;margin-top:4px;font-family:inherit" onclick="doLogin()">
+      Se connecter
+    </button>
+  </div>
+</div>
+
 <div id="app">
   <!-- HEADER -->
   <div id="header">
@@ -132,12 +180,20 @@
           <div id="logo-sub">Outil d'apprentissage vocal</div>
         </div>
       </div>
-      <div id="status">Aucune piste chargée</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div id="status">Aucune piste chargée</div>
+        <div id="user-badge" class="hidden">
+          <span id="user-email" style="font-size:11px;color:#555;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+          <span id="user-role-pill" class="role-pill"></span>
+          <button onclick="doLogout()" style="background:transparent;border:1px solid #2a2418;border-radius:6px;color:#555;font-size:10px;padding:3px 8px;cursor:pointer;font-family:inherit;transition:all 0.15s" title="Se déconnecter">↪ Déco</button>
+        </div>
+      </div>
     </div>
     <div id="tabs">
       <button class="tab-btn active" onclick="showTab('player')">♪ &nbsp;Lecteur</button>
       <button class="tab-btn" onclick="showTab('record')">⏺ &nbsp;Enregistrer</button>
       <button class="tab-btn" id="takes-tab-btn" onclick="showTab('takes')">◈ &nbsp;Prises (0)</button>
+      <button class="tab-btn hidden" id="admin-tab-btn" onclick="showTab('admin')">⚙ &nbsp;Admin</button>
     </div>
   </div>
 
@@ -291,7 +347,7 @@
     <!-- ═══ TAKES TAB ═══════════════════════════════════════════════════════ -->
     <div id="tab-takes" class="hidden">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div class="section-label" style="margin:0">Mes enregistrements</div>
+        <div class="section-label" style="margin:0" id="takes-section-label">Mes enregistrements</div>
         <button onclick="showTab('record')" style="padding:6px 14px;background:#CC222218;border:1px solid #CC2222;border-radius:6px;color:#FF6644;font-size:11px;cursor:pointer;font-family:inherit">+ Nouvelle prise</button>
       </div>
       <div id="takes-list"></div>
@@ -299,6 +355,17 @@
         <div style="font-size:36px;margin-bottom:12px">♪</div>
         <div style="font-size:13px;color:#444">Aucune prise pour le moment</div>
         <div style="font-size:11px;color:#333;margin-top:6px">Enregistrez votre voix dans l'onglet Enregistrer</div>
+      </div>
+    </div>
+
+    <!-- ═══ ADMIN TAB ════════════════════════════════════════════════════════ -->
+    <div id="tab-admin" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div class="section-label" style="margin:0">Gestion des utilisateurs</div>
+        <button onclick="loadAdminUsers()" style="padding:5px 12px;background:transparent;border:1px solid #2a2418;border-radius:6px;color:#666;font-size:11px;cursor:pointer;font-family:inherit">↻ Actualiser</button>
+      </div>
+      <div id="admin-users-list">
+        <div style="font-size:12px;color:#444;text-align:center;padding:24px">Chargement…</div>
       </div>
     </div>
 
@@ -343,6 +410,11 @@ let micAnalyser = null;
 let vuRaf = null;
 let reviewVoiceOn = true;
 let reviewTrackOn = {}; // per-track toggle in review
+
+// ─── SUPABASE STATE ───────────────────────────────────────────────────────────
+let sb = null;
+let currentUser = null;
+let currentProfile = null;
 
 function buildReviewTrackToggles() {
   // init all tracks that were used as backing
@@ -407,12 +479,17 @@ function getAC() {
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
+const ALL_TABS = ["player", "record", "takes", "admin"];
 function showTab(name) {
-  ["player","record","takes"].forEach(t => {
-    document.getElementById("tab-" + t).classList.toggle("hidden", t !== name);
-    document.querySelectorAll(".tab-btn")[["player","record","takes"].indexOf(t)].classList.toggle("active", t === name);
+  ALL_TABS.forEach(t => {
+    const el = document.getElementById("tab-" + t);
+    if (el) el.classList.toggle("hidden", t !== name);
   });
+  document.querySelectorAll(".tab-btn").forEach(btn => btn.classList.remove("active"));
+  const activeBtn = ["player","record","takes","admin"].indexOf(name);
+  document.querySelectorAll(".tab-btn")[activeBtn]?.classList.add("active");
   if (name === "record") buildBackingRows();
+  if (name === "admin") loadAdminUsers();
 }
 
 // ─── UPLOAD ──────────────────────────────────────────────────────────────────
@@ -883,27 +960,44 @@ function stopReviewPlay() {
   if (btn) btn.textContent = "▶";
 }
 
-function saveTake() {
+async function saveTake() {
   if (!recBuffer) return;
+  const buf = recBuffer;
   const take = {
-    id: Date.now(), buffer: recBuffer,
+    id:              Date.now(), // ID temporaire remplacé après insert DB
+    buffer:          buf,
     backingSnapshot: { ...selectedBacking },
-    reviewSnapshot: { ...reviewTrackOn },
-    voiceOn: reviewVoiceOn,
-    voiceVol: reviewVoiceVol,
-    name: `Prise ${takes.length + 1}`,
-    date: new Date().toLocaleDateString("fr-FR"),
-    duration: fmt(recBuffer.duration),
-    favorite: false,
+    reviewSnapshot:  { ...reviewTrackOn },
+    voiceOn:         reviewVoiceOn,
+    voiceVol:        reviewVoiceVol,
+    name:            `Prise ${takes.length + 1}`,
+    date:            new Date().toLocaleDateString("fr-FR"),
+    duration:        fmt(buf.duration),
+    favorite:        false,
+    comments:        [],
+    uploading:       !!sb, // indicateur visuel pendant l'upload
   };
   takes.unshift(take);
   stopReviewPlay();
   recBuffer = null;
-  recState = "idle";
+  recState  = "idle";
   document.getElementById("rec-review").classList.add("hidden");
   document.getElementById("rec-idle").classList.remove("hidden");
   updateTakesCount();
   showTab("takes");
+
+  // Persistance Supabase
+  if (sb && currentUser) {
+    const storagePath = await uploadTakeToStorage(buf);
+    const dbId        = await insertTakeToDB(take, storagePath);
+    if (dbId) {
+      take.id      = dbId;
+      take.dbId    = dbId;
+      take.storageId = storagePath;
+    }
+    take.uploading = false;
+    renderTakes();
+  }
 }
 
 function restartRecording() {
@@ -971,33 +1065,65 @@ function renderTakes() {
     card.id = `take-${take.id}`;
     const backingBadges = TRACKS.filter(t => take.backingSnapshot[t.id] && trackData[t.id].buffer)
       .map(t => `<span class="badge" style="background:${t.color}18;border:1px solid ${t.color}33;color:${t.color}">${t.label}</span>`).join("");
+    const comments    = take.comments || [];
+    const commentCount = comments.length;
+    const isAdmin     = currentProfile?.role === "admin";
+    const commentsHtml = comments.map(c => `
+      <div class="take-comment-item">
+        <div style="flex:1;font-size:12px;color:#aaa">${c.note}</div>
+        <div style="font-size:10px;color:#444;margin-left:8px;flex-shrink:0">${c.date}</div>
+        ${isAdmin ? `
+          <button onclick="event.stopPropagation();editTakeComment(${take.id},${c.id})" style="background:transparent;border:none;color:#555;cursor:pointer;font-size:11px;padding:0 4px" title="Modifier">✏</button>
+          <button onclick="event.stopPropagation();deleteTakeComment(${take.id},${c.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:11px;padding:0 4px" title="Supprimer">✕</button>
+        ` : ""}
+      </div>
+    `).join("");
     card.innerHTML = `
-      <div class="take-play-btn ${playingTakeId === take.id ? "active" : ""}" id="take-play-${take.id}">
-        ${playingTakeId === take.id ? "⏸" : "▶"}
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;color:#E8E0D0;margin-bottom:2px">
-          ${take.favorite ? '<span style="color:#E8C547">★ </span>' : ""}${take.name}
+      <div class="take-main-row">
+        <div class="take-play-btn ${playingTakeId === take.id ? "active" : ""}" id="take-play-${take.id}">
+          ${take.loading ? '<span class="spin-sm" style="margin:0"></span>' : playingTakeId === take.id ? "⏸" : "▶"}
         </div>
-        <div style="font-size:11px;color:#555">${take.date} · ${take.duration}</div>
-        <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${backingBadges}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;color:#E8E0D0;margin-bottom:2px">
+            ${take.uploading ? '<span class="spin-sm"></span>' : ""}
+            ${take.favorite ? '<span style="color:#E8C547">★ </span>' : ""}${take.name}
+          </div>
+          <div style="font-size:11px;color:#555">${take.date} · ${take.duration}${take.userEmail && isAdmin ? ` · <span style="color:#E8C54788">${take.userEmail}</span>` : ""}</div>
+          <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${backingBadges}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+          <button onclick="event.stopPropagation();toggleFavorite(${take.id})" style="background:transparent;border:none;color:${take.favorite ? "#E8C547" : "#333"};cursor:pointer;font-size:18px" title="Favori">★</button>
+          <button onclick="event.stopPropagation();renameTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:13px" title="Renommer">✏</button>
+          <button onclick="event.stopPropagation();downloadTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:14px" title="Télécharger mix WAV">⬇</button>
+          <button onclick="event.stopPropagation();deleteTake(${take.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:13px" title="Supprimer">✕</button>
+        </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
-        <button onclick="toggleFavorite(${take.id})" style="background:transparent;border:none;color:${take.favorite ? "#E8C547" : "#333"};cursor:pointer;font-size:18px" title="Favori">★</button>
-        <button onclick="renameTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:13px" title="Renommer">✏</button>
-        <button onclick="downloadTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:14px" title="Télécharger mix WAV">⬇</button>
-        <button onclick="deleteTake(${take.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:13px" title="Supprimer">✕</button>
+      <div class="take-comments-section">
+        <div class="take-comments-toggle" onclick="event.stopPropagation();toggleTakeComments(${take.id})">
+          <span style="color:#444;font-size:10px;text-transform:uppercase;letter-spacing:0.12em">
+            Commentaires${commentCount > 0 ? ` (${commentCount})` : ""}
+          </span>
+          <span id="take-comments-arrow-${take.id}" style="color:#333;font-size:10px">${commentCount > 0 ? "▲" : "▼"}</span>
+        </div>
+        <div id="take-comments-${take.id}" class="${commentCount > 0 ? "" : "hidden"}">
+          ${take.loading ? '<div style="font-size:11px;color:#555;padding:6px 0"><span class="spin-sm"></span> Chargement audio…</div>' : ""}
+          ${commentsHtml}
+          ${isAdmin
+            ? `<button onclick="event.stopPropagation();addTakeComment(${take.id})" class="take-comment-add-btn">+ Ajouter un commentaire</button>`
+            : (commentCount === 0 ? '<div style="font-size:11px;color:#333;padding:4px 0;font-style:italic">Aucun commentaire</div>' : "")}
+        </div>
       </div>
     `;
     card.addEventListener("click", e => {
       if (e.target.tagName === "BUTTON") return;
+      if (e.target.closest(".take-comments-section")) return;
       playTake(take);
     });
     list.appendChild(card);
   });
 }
 
-function playTake(take) {
+async function playTake(take) {
   if (playingTakeId === take.id) {
     takeSources.forEach(s => { try { s.stop(); } catch(e){} });
     takeSources = [];
@@ -1007,6 +1133,19 @@ function playTake(take) {
   }
   takeSources.forEach(s => { try { s.stop(); } catch(e){} });
   takeSources = [];
+
+  // Télécharger le buffer depuis Supabase si absent
+  if (!take.buffer && take.storageId && sb) {
+    take.loading = true;
+    renderTakes();
+    const { data, error } = await sb.storage.from("takes").download(take.storageId);
+    take.loading = false;
+    if (error) { console.error("download take:", error); renderTakes(); return; }
+    const ab  = await data.arrayBuffer();
+    const aac2 = getAC();
+    take.buffer = await aac2.decodeAudioData(ab);
+  }
+
   const aac = getAC();
   // Voice (only if voiceOn was true when saved, default true for old takes)
   const voiceOn = take.voiceOn !== false;
@@ -1036,7 +1175,10 @@ function playTake(take) {
 
 function toggleFavorite(id) {
   const take = takes.find(t => t.id === id);
-  if (take) { take.favorite = !take.favorite; renderTakes(); }
+  if (!take) return;
+  take.favorite = !take.favorite;
+  if (sb && take.dbId) sb.from("takes").update({ favorite: take.favorite }).eq("id", take.dbId);
+  renderTakes();
 }
 
 async function downloadTake(id) {
@@ -1077,7 +1219,12 @@ async function downloadTake(id) {
 function deleteTake(id) {
   const i = takes.findIndex(t => t.id === id);
   if (i > -1) {
+    const take = takes[i];
     if (playingTakeId === id) { takeSources.forEach(s => { try { s.stop(); } catch(e){} }); takeSources = []; playingTakeId = null; }
+    if (sb && take.dbId) {
+      sb.from("takes").delete().eq("id", take.dbId);
+      if (take.storageId) sb.storage.from("takes").remove([take.storageId]);
+    }
     takes.splice(i, 1);
     updateTakesCount();
   }
@@ -1212,6 +1359,59 @@ function renameTake(id) {
   const newName = prompt("Nouveau nom pour cette prise :", take.name);
   if (newName === null || newName.trim() === "") return;
   take.name = newName.trim();
+  if (sb && take.dbId) sb.from("takes").update({ name: take.name }).eq("id", take.dbId);
+  renderTakes();
+}
+
+// ─── TAKE COMMENTS ────────────────────────────────────────────────────────────
+function toggleTakeComments(id) {
+  const section = document.getElementById(`take-comments-${id}`);
+  const arrow   = document.getElementById(`take-comments-arrow-${id}`);
+  if (!section) return;
+  const hidden = section.classList.toggle("hidden");
+  if (arrow) arrow.textContent = hidden ? "▼" : "▲";
+}
+
+async function addTakeComment(id) {
+  const take = takes.find(t => t.id === id);
+  if (!take) return;
+  // Seul l'admin peut commenter (RLS côté DB, vérif UI aussi)
+  if (sb && currentProfile?.role !== "admin") return;
+  const note = prompt("Ajouter un commentaire sur cette prise :", "");
+  if (note === null || note.trim() === "") return;
+  if (!take.comments) take.comments = [];
+  const comment = { id: Date.now(), note: note.trim(), date: new Date().toLocaleDateString("fr-FR") };
+  take.comments.push(comment);
+  renderTakes();
+  if (sb && take.dbId) {
+    const { data, error } = await sb.from("take_comments").insert({
+      take_id: take.dbId,
+      user_id: currentUser.id,
+      note:    comment.note,
+      date:    comment.date,
+    }).select().single();
+    if (data) { comment.id = data.id; }
+    if (error) console.error("addTakeComment:", error);
+  }
+}
+
+function editTakeComment(takeId, commentId) {
+  const take = takes.find(t => t.id === takeId);
+  if (!take || !take.comments) return;
+  const comment = take.comments.find(c => c.id === commentId);
+  if (!comment) return;
+  const note = prompt("Modifier le commentaire :", comment.note);
+  if (note === null) return;
+  comment.note = note.trim();
+  if (sb) sb.from("take_comments").update({ note: comment.note }).eq("id", commentId);
+  renderTakes();
+}
+
+function deleteTakeComment(takeId, commentId) {
+  const take = takes.find(t => t.id === takeId);
+  if (!take || !take.comments) return;
+  take.comments = take.comments.filter(c => c.id !== commentId);
+  if (sb) sb.from("take_comments").delete().eq("id", commentId);
   renderTakes();
 }
 
@@ -1220,10 +1420,175 @@ function fmt(s) {
   return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`;
 }
 
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+async function initSupabase() {
+  const url = window.SUPABASE_URL;
+  const key = window.SUPABASE_ANON_KEY;
+  if (!url || !key || url === "VOTRE_URL_SUPABASE") {
+    // Mode local : pas de Supabase configuré, on cache l'overlay
+    console.warn("Supabase non configuré — mode local sans persistance");
+    document.getElementById("auth-overlay").classList.add("hidden");
+    return;
+  }
+  sb = window.supabase.createClient(url, key);
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await onLogin(session.user);
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === "SIGNED_IN"  && session) await onLogin(session.user);
+    if (event === "SIGNED_OUT")              onLogout();
+  });
+}
+
+async function doLogin() {
+  const email    = document.getElementById("auth-email").value.trim();
+  const password = document.getElementById("auth-password").value;
+  const btn      = document.getElementById("auth-btn");
+  const err      = document.getElementById("auth-error");
+  if (!email || !password) { err.textContent = "Email et mot de passe requis."; return; }
+  btn.innerHTML = '<span class="spin-sm"></span> Connexion…';
+  btn.disabled  = true;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  btn.innerHTML = "Se connecter";
+  btn.disabled  = false;
+  if (error) { err.textContent = error.message; return; }
+  err.textContent = "";
+}
+
+async function doLogout() {
+  if (sb) await sb.auth.signOut();
+}
+
+async function onLogin(user) {
+  currentUser = user;
+  const { data: profile } = await sb.from("profiles").select("*").eq("id", user.id).single();
+  currentProfile = profile;
+  const isAdmin = profile?.role === "admin";
+
+  document.getElementById("auth-overlay").classList.add("hidden");
+  document.getElementById("user-badge").classList.remove("hidden");
+  document.getElementById("user-email").textContent = user.email;
+  const pill = document.getElementById("user-role-pill");
+  pill.textContent = isAdmin ? "Admin" : "Choriste";
+  pill.className   = `role-pill ${isAdmin ? "admin" : "choriste"}`;
+
+  // Onglet Admin visible uniquement pour l'admin
+  document.getElementById("admin-tab-btn").classList.toggle("hidden", !isAdmin);
+
+  // Libellé de l'onglet Prises
+  const lbl = document.getElementById("takes-section-label");
+  if (lbl) lbl.textContent = isAdmin ? "Toutes les prises" : "Mes enregistrements";
+
+  await loadTakesFromDB();
+}
+
+function onLogout() {
+  currentUser    = null;
+  currentProfile = null;
+  takes.length   = 0;
+  updateTakesCount();
+  document.getElementById("auth-overlay").classList.remove("hidden");
+  document.getElementById("user-badge").classList.add("hidden");
+  document.getElementById("admin-tab-btn").classList.add("hidden");
+  showTab("player");
+}
+
+// ─── DB — CHARGEMENT DES PRISES ───────────────────────────────────────────────
+async function loadTakesFromDB() {
+  if (!sb || !currentUser) return;
+  const { data, error } = await sb
+    .from("takes")
+    .select("*, take_comments(id, note, date, user_id), profiles(email)")
+    .order("created_at", { ascending: false });
+  if (error) { console.error("loadTakesFromDB:", error); return; }
+
+  takes.length = 0;
+  for (const row of data) {
+    takes.push({
+      id:              row.id,
+      dbId:            row.id,
+      storageId:       row.storage_path,
+      userId:          row.user_id,
+      userEmail:       row.profiles?.email,
+      name:            row.name,
+      date:            row.date,
+      duration:        row.duration,
+      favorite:        row.favorite,
+      backingSnapshot: row.backing_snapshot  || {},
+      reviewSnapshot:  row.review_snapshot   || {},
+      voiceOn:         row.voice_on,
+      voiceVol:        row.voice_vol,
+      comments:        (row.take_comments || []).map(c => ({ id: c.id, note: c.note, date: c.date })),
+      buffer:          null, // téléchargé à la demande au premier play
+    });
+  }
+  updateTakesCount();
+}
+
+// ─── DB — SAUVEGARDE D'UNE PRISE ──────────────────────────────────────────────
+async function uploadTakeToStorage(buffer) {
+  const wavAB   = toWav(buffer);
+  const wavBlob = new Blob([wavAB], { type: "audio/wav" });
+  const path    = `${currentUser.id}/${Date.now()}.wav`;
+  const { error } = await sb.storage.from("takes").upload(path, wavBlob, { contentType: "audio/wav" });
+  if (error) { console.error("Storage upload:", error); return null; }
+  return path;
+}
+
+async function insertTakeToDB(take, storagePath) {
+  const { data, error } = await sb.from("takes").insert({
+    user_id:          currentUser.id,
+    name:             take.name,
+    date:             take.date,
+    duration:         take.duration,
+    favorite:         take.favorite,
+    storage_path:     storagePath,
+    backing_snapshot: take.backingSnapshot,
+    review_snapshot:  take.reviewSnapshot,
+    voice_on:         take.voiceOn,
+    voice_vol:        take.voiceVol,
+  }).select().single();
+  if (error) { console.error("insertTakeToDB:", error); return null; }
+  return data.id;
+}
+
+// ─── ADMIN — UTILISATEURS ─────────────────────────────────────────────────────
+async function loadAdminUsers() {
+  if (!sb || currentProfile?.role !== "admin") return;
+  const container = document.getElementById("admin-users-list");
+  if (!container) return;
+  container.innerHTML = '<div style="font-size:12px;color:#444;text-align:center;padding:24px"><span class="spin-sm"></span> Chargement…</div>';
+  const { data: users, error } = await sb.from("profiles").select("*").order("created_at");
+  if (error) { container.innerHTML = `<div style="color:#FF4444;font-size:12px;padding:16px">${error.message}</div>`; return; }
+  if (!users.length) { container.innerHTML = '<div style="font-size:12px;color:#444;text-align:center;padding:24px">Aucun utilisateur</div>'; return; }
+  container.innerHTML = users.map(u => `
+    <div class="admin-user-row">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;color:#E8E0D0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.email}</div>
+        <div style="font-size:10px;color:#444;margin-top:2px">${new Date(u.created_at).toLocaleDateString("fr-FR")}</div>
+      </div>
+      <span class="role-pill ${u.role}">${u.role === "admin" ? "Admin" : "Choriste"}</span>
+      ${u.id !== currentUser.id
+        ? `<button onclick="toggleUserRole('${u.id}','${u.role}')"
+             style="padding:4px 10px;background:transparent;border:1px solid #2a2418;border-radius:6px;color:#555;font-size:11px;cursor:pointer;font-family:inherit;transition:all 0.15s">
+             ${u.role === "admin" ? "→ Choriste" : "→ Admin"}
+           </button>`
+        : '<span style="font-size:10px;color:#333;padding:0 4px">(vous)</span>'}
+    </div>
+  `).join("");
+}
+
+async function toggleUserRole(userId, currentRole) {
+  const newRole = currentRole === "admin" ? "choriste" : "admin";
+  const { error } = await sb.from("profiles").update({ role: newRole }).eq("id", userId);
+  if (error) { console.error("toggleUserRole:", error); return; }
+  await loadAdminUsers();
+}
+
 // ─── INIT ────────────────────────────────────────────────────────────────────
 buildUploadRows();
 document.getElementById("player-main").classList.add("hidden");
 renderMarkers();
+initSupabase();
 </script>
 </body>
 </html>
