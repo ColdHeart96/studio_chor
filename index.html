@@ -89,12 +89,19 @@
   #countdown-num { font-size: 96px; color: #E8C547; font-style: italic; text-shadow: 0 0 60px #E8C54788; text-align: center; animation: cdPop 1s ease-out; }
 
   /* Takes */
-  .take-card { background: #12100a; border: 1px solid #1e1c18; border-radius: 12px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 12px; }
+  .take-card { background: #12100a; border: 1px solid #1e1c18; border-radius: 12px; padding: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; gap: 0; }
   .take-card:hover { border-color: #2a2418; }
   .take-card.playing { border-color: rgba(232,197,71,0.3); background: rgba(232,197,71,0.03); }
+  .take-main-row { display: flex; align-items: center; gap: 12px; width: 100%; }
   .take-play-btn { width: 38px; height: 38px; border-radius: 50%; background: #1a1814; border: 1px solid #2a2418; color: #666; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; transition: all 0.15s; }
   .take-play-btn.active { background: linear-gradient(135deg,#E8C547,#B8962A); border: none; color: #0a0a0f; }
   .badge { font-size: 9px; padding: 2px 6px; border-radius: 3px; }
+  .take-comments-section { margin-top: 10px; border-top: 1px solid #1e1c18; padding-top: 8px; }
+  .take-comments-toggle { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 2px 0; user-select: none; }
+  .take-comments-toggle:hover span { color: #777 !important; }
+  .take-comment-item { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #0e0c08; border: 1px solid #1e1c18; border-radius: 6px; margin-top: 5px; }
+  .take-comment-add-btn { margin-top: 6px; background: transparent; border: 1px dashed #2a2418; border-radius: 6px; color: #555; font-size: 11px; font-family: inherit; cursor: pointer; padding: 5px 10px; width: 100%; text-align: left; transition: all 0.15s; }
+  .take-comment-add-btn:hover { border-color: #E8C54755; color: #E8C547; }
 
   /* Progress bar */
   .prog-container { height: 4px; background: #1e1c18; border-radius: 2px; cursor: pointer; position: relative; margin: 8px 0; }
@@ -895,6 +902,7 @@ function saveTake() {
     date: new Date().toLocaleDateString("fr-FR"),
     duration: fmt(recBuffer.duration),
     favorite: false,
+    comments: [],
   };
   takes.unshift(take);
   stopReviewPlay();
@@ -971,26 +979,51 @@ function renderTakes() {
     card.id = `take-${take.id}`;
     const backingBadges = TRACKS.filter(t => take.backingSnapshot[t.id] && trackData[t.id].buffer)
       .map(t => `<span class="badge" style="background:${t.color}18;border:1px solid ${t.color}33;color:${t.color}">${t.label}</span>`).join("");
+    const comments = take.comments || [];
+    const commentCount = comments.length;
+    const commentsHtml = comments.map(c => `
+      <div class="take-comment-item">
+        <div style="flex:1;font-size:12px;color:#aaa">${c.note}</div>
+        <div style="font-size:10px;color:#444;margin-left:8px;flex-shrink:0">${c.date}</div>
+        <button onclick="event.stopPropagation();editTakeComment(${take.id},${c.id})" style="background:transparent;border:none;color:#555;cursor:pointer;font-size:11px;padding:0 4px" title="Modifier">✏</button>
+        <button onclick="event.stopPropagation();deleteTakeComment(${take.id},${c.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:11px;padding:0 4px" title="Supprimer">✕</button>
+      </div>
+    `).join("");
     card.innerHTML = `
-      <div class="take-play-btn ${playingTakeId === take.id ? "active" : ""}" id="take-play-${take.id}">
-        ${playingTakeId === take.id ? "⏸" : "▶"}
-      </div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;color:#E8E0D0;margin-bottom:2px">
-          ${take.favorite ? '<span style="color:#E8C547">★ </span>' : ""}${take.name}
+      <div class="take-main-row">
+        <div class="take-play-btn ${playingTakeId === take.id ? "active" : ""}" id="take-play-${take.id}">
+          ${playingTakeId === take.id ? "⏸" : "▶"}
         </div>
-        <div style="font-size:11px;color:#555">${take.date} · ${take.duration}</div>
-        <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${backingBadges}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;color:#E8E0D0;margin-bottom:2px">
+            ${take.favorite ? '<span style="color:#E8C547">★ </span>' : ""}${take.name}
+          </div>
+          <div style="font-size:11px;color:#555">${take.date} · ${take.duration}</div>
+          <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">${backingBadges}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+          <button onclick="event.stopPropagation();toggleFavorite(${take.id})" style="background:transparent;border:none;color:${take.favorite ? "#E8C547" : "#333"};cursor:pointer;font-size:18px" title="Favori">★</button>
+          <button onclick="event.stopPropagation();renameTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:13px" title="Renommer">✏</button>
+          <button onclick="event.stopPropagation();downloadTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:14px" title="Télécharger mix WAV">⬇</button>
+          <button onclick="event.stopPropagation();deleteTake(${take.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:13px" title="Supprimer">✕</button>
+        </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
-        <button onclick="toggleFavorite(${take.id})" style="background:transparent;border:none;color:${take.favorite ? "#E8C547" : "#333"};cursor:pointer;font-size:18px" title="Favori">★</button>
-        <button onclick="renameTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:13px" title="Renommer">✏</button>
-        <button onclick="downloadTake(${take.id})" style="background:transparent;border:none;color:#444;cursor:pointer;font-size:14px" title="Télécharger mix WAV">⬇</button>
-        <button onclick="deleteTake(${take.id})" style="background:transparent;border:none;color:#333;cursor:pointer;font-size:13px" title="Supprimer">✕</button>
+      <div class="take-comments-section">
+        <div class="take-comments-toggle" onclick="event.stopPropagation();toggleTakeComments(${take.id})">
+          <span style="color:#444;font-size:10px;text-transform:uppercase;letter-spacing:0.12em">
+            Commentaires${commentCount > 0 ? ` (${commentCount})` : ""}
+          </span>
+          <span id="take-comments-arrow-${take.id}" style="color:#333;font-size:10px">${commentCount > 0 ? "▲" : "▼"}</span>
+        </div>
+        <div id="take-comments-${take.id}" class="${commentCount > 0 ? "" : "hidden"}">
+          ${commentsHtml}
+          <button onclick="event.stopPropagation();addTakeComment(${take.id})" class="take-comment-add-btn">+ Ajouter un commentaire</button>
+        </div>
       </div>
     `;
     card.addEventListener("click", e => {
       if (e.target.tagName === "BUTTON") return;
+      if (e.target.closest(".take-comments-section")) return;
       playTake(take);
     });
     list.appendChild(card);
@@ -1212,6 +1245,43 @@ function renameTake(id) {
   const newName = prompt("Nouveau nom pour cette prise :", take.name);
   if (newName === null || newName.trim() === "") return;
   take.name = newName.trim();
+  renderTakes();
+}
+
+// ─── TAKE COMMENTS ────────────────────────────────────────────────────────────
+function toggleTakeComments(id) {
+  const section = document.getElementById(`take-comments-${id}`);
+  const arrow = document.getElementById(`take-comments-arrow-${id}`);
+  if (!section) return;
+  const hidden = section.classList.toggle("hidden");
+  if (arrow) arrow.textContent = hidden ? "▼" : "▲";
+}
+
+function addTakeComment(id) {
+  const take = takes.find(t => t.id === id);
+  if (!take) return;
+  const note = prompt("Ajouter un commentaire sur cette prise :", "");
+  if (note === null || note.trim() === "") return;
+  if (!take.comments) take.comments = [];
+  take.comments.push({ id: Date.now(), note: note.trim(), date: new Date().toLocaleDateString("fr-FR") });
+  renderTakes();
+}
+
+function editTakeComment(takeId, commentId) {
+  const take = takes.find(t => t.id === takeId);
+  if (!take || !take.comments) return;
+  const comment = take.comments.find(c => c.id === commentId);
+  if (!comment) return;
+  const note = prompt("Modifier le commentaire :", comment.note);
+  if (note === null) return;
+  comment.note = note.trim();
+  renderTakes();
+}
+
+function deleteTakeComment(takeId, commentId) {
+  const take = takes.find(t => t.id === takeId);
+  if (!take || !take.comments) return;
+  take.comments = take.comments.filter(c => c.id !== commentId);
   renderTakes();
 }
 
