@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/Users/onpoi/Downloads/choral_app/studio_chor log --oneline -10)",
+      "Bash(npm uninstall next-pwa)",
+      "Bash(npm install @ducanh2912/next-pwa)",
+      "Bash(npm uninstall next-pwa --legacy-peer-deps)",
+      "Bash(npm install @ducanh2912/next-pwa --legacy-peer-deps)",
+      "Bash(npm run dev)"
+    ]
+  }
+}
