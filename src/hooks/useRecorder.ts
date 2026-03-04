@@ -4,6 +4,7 @@ import {
   VocalRecorder,
   requestMicrophoneAccess,
   type RecorderState,
+  type AudioMode,
 } from '@/lib/audio/recorder'
 import { COUNTDOWN_SECONDS, MAX_RECORDING_SECONDS } from '@/lib/constants'
 
@@ -31,11 +32,11 @@ export function useRecorder() {
     stream?.getTracks().forEach(t => t.stop())
   }, [])
 
-  async function startCountdown() {
+  async function startCountdown(audioMode: AudioMode = 'headphones') {
     setError(null)
     try {
       // Must request mic inside user gesture (iOS requirement)
-      const s = await requestMicrophoneAccess()
+      const s = await requestMicrophoneAccess(audioMode)
       setStream(s)
 
       const recorder = new VocalRecorder()

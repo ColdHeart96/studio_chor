@@ -13,12 +13,17 @@ export function useAudioEngine() {
   const [loopA, setLoopA]               = useState(0.2)
   const [loopB, setLoopB]               = useState(0.7)
 
+  // Ref always up-to-date (frame-perfect, no React batching delay)
+  const timeRef = useRef<{ t: number; d: number }>({ t: 0, d: 0 })
+
   useEffect(() => {
     engine.onTimeUpdate = (t, d) => {
+      timeRef.current = { t, d }
       setCurrentTime(t)
       setDuration(d)
     }
     engine.onEnded = () => {
+      timeRef.current = { t: 0, d: timeRef.current.d }
       setIsPlaying(false)
       setCurrentTime(0)
     }
@@ -40,6 +45,7 @@ export function useAudioEngine() {
 
   const seek = useCallback((time: number) => {
     engine.seek(time)
+    timeRef.current.t = time
     setCurrentTime(time)
   }, [engine])
 
@@ -78,6 +84,7 @@ export function useAudioEngine() {
     loopEnabled,
     loopA,
     loopB,
+    timeRef,   // frame-perfect ref for direct DOM updates
     togglePlay,
     seek,
     seekFraction,

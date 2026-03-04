@@ -28,6 +28,7 @@ export function PlayerTab() {
   const {
     engine, isPlaying, currentTime, duration,
     speed, loopEnabled, loopA, loopB,
+    timeRef,
     togglePlay, seek, seekFraction,
     setSpeed, setLoop,
   } = useAudioEngine()
@@ -99,7 +100,6 @@ export function PlayerTab() {
 
   // ── Load tracks ───────────────────────────────────────────────────────────
   const hasLoaded = Object.keys(loadedTracks).length > 0
-  const progress  = duration > 0 ? currentTime / duration : 0
 
   useEffect(() => {
     if (!tracks.length) return
@@ -183,10 +183,9 @@ export function PlayerTab() {
 
           <TransportControls
             isPlaying={isPlaying}
-            currentTime={currentTime}
             duration={duration}
-            progress={progress}
             loopEnabled={loopEnabled}
+            timeRef={timeRef}
             onTogglePlay={togglePlay}
             onSeekFraction={seekFraction}
             onToggleLoop={() => setLoop(!loopEnabled)}

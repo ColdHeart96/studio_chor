@@ -8,7 +8,7 @@ import { STORAGE_BUCKETS } from '@/lib/constants'
 export async function uploadTake(userId: string, blob: Blob, mimeType: string): Promise<string> {
   const sb = getSupabaseClient()
 
-  const ext  = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('webm') ? 'webm' : 'mp4'
+  const ext  = mimeType.includes('wav') ? 'wav' : mimeType.includes('webm') ? 'webm' : 'mp4'
   const path = `${userId}/${Date.now()}.${ext}`
 
   const { error } = await sb.storage
