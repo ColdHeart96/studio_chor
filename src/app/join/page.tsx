@@ -1,10 +1,10 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { joinOrgByCode } from '@/lib/orgs'
 
-export default function JoinPage() {
+function JoinPageContent() {
   const router = useRouter()
   const params = useSearchParams()
   const { user, loading } = useAuth()
@@ -76,5 +76,13 @@ export default function JoinPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense>
+      <JoinPageContent />
+    </Suspense>
   )
 }
