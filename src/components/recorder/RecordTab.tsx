@@ -104,13 +104,15 @@ export function RecordTab() {
       setIsPreviewing(false)
       try { engine.pause() } catch { /* ignore */ }
     } else {
+      // iOS: trigger resume synchronously within the user gesture
+      engine.resumeContext().catch(() => {})
       const sel = selectedVoicesRef.current
       const vols = trackVolumesRef.current
       for (const v of VOICE_PARTS) {
         engine.setVolume(v, sel.has(v) ? (vols[v] ?? 0.8) : 0)
       }
       engine.seek(0)
-      engine.setLoop(true, 0, 1)  // loop during preview so user can adjust volumes
+      engine.setLoop(true, 0, 1)
       engine.play().catch(() => {})
       setIsPreviewing(true)
     }

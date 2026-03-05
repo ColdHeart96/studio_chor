@@ -113,11 +113,12 @@ export function ReviewPanel({
   }
 
   // Matches index.html startReviewPlay() exactly
-  function startReviewPlay() {
+  async function startReviewPlay() {
     const voiceBuf = voiceBufferRef.current
     if (!voiceBuf) return
+    // iOS: always await resume — context may be suspended even if state reports 'running'
+    await engine.resumeContext()
     const aac = engine.getContext()
-    if (aac.state === 'suspended') aac.resume()
     _stopAll()
 
     const newSources: AudioBufferSourceNode[] = []
@@ -169,8 +170,13 @@ export function ReviewPanel({
   }
 
   function togglePlay() {
-    if (isPlaying) stopReviewPlay()
-    else startReviewPlay()
+    if (isPlaying) {
+      stopReviewPlay()
+    } else {
+      // iOS: trigger resume synchronously within the user gesture, then start async
+      engine.resumeContext().catch(() => {})
+      startReviewPlay()
+    }
   }
 
   // Toggle voice: stop playback (user must re-press play), like index.html

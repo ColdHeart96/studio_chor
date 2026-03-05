@@ -27,7 +27,10 @@ export function TakePlayer({ storagePath, duration: durationStr, comments = [], 
       try {
         const url   = await getTakeUrl(storagePath)
         if (!mounted) return
-        const audio = new Audio(url)
+        const audio = new Audio()
+        audio.preload = 'auto'
+        audio.src = url
+        audio.load()  // iOS requires explicit load() before play() works reliably
         audioRef.current = audio
 
         audio.addEventListener('loadedmetadata', () => {

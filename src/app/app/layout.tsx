@@ -8,12 +8,21 @@ import { Header } from '@/components/layout/Header'
 import { TabBar } from '@/components/layout/TabBar'
 import { OrgGate } from '@/components/layout/OrgGate'
 import { FullPageSpinner } from '@/components/ui/Spinner'
+import { getAudioEngine } from '@/lib/audio/AudioEngine'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, loading: authLoading, signOut } = useAuth()
   const { profile, loading: profileLoading } = useProfile(user?.id)
-  const [takesCount, setTakesCount] = useState(0)
+  const [takesCount] = useState(0)
+
+  // iOS AudioContext unlock — must be triggered in a user gesture
+  useEffect(() => {
+    const engine = getAudioEngine()
+    const unlock = () => engine.resumeContext().catch(() => {})
+    document.addEventListener('touchstart', unlock, { once: true, passive: true })
+    return () => document.removeEventListener('touchstart', unlock)
+  }, [])
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/auth')
