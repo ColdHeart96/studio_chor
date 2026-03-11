@@ -9,6 +9,9 @@ interface ABLoopControlProps {
 }
 
 export function ABLoopControl({ loopA, loopB, duration, onChange }: ABLoopControlProps) {
+  // Seuil minimal : 0.5s, juste pour éviter A === B
+  const minGapFraction = duration > 0 ? 0.5 / duration : 0.005
+
   return (
     <div className="bg-studio-surface border border-studio-border rounded-xl p-4 mb-3">
       <div className="text-[10px] text-studio-gold uppercase tracking-wider mb-3">Boucle A-B</div>
@@ -24,7 +27,7 @@ export function ABLoopControl({ loopA, loopB, duration, onChange }: ABLoopContro
             value={Math.round(loopA * 100)}
             onChange={e => {
               const a = Number(e.target.value) / 100
-              if (a < loopB - 0.02) onChange(a, loopB)
+              if (a < loopB - minGapFraction) onChange(a, loopB)
             }}
             className="w-full"
             style={{
@@ -46,7 +49,7 @@ export function ABLoopControl({ loopA, loopB, duration, onChange }: ABLoopContro
             value={Math.round(loopB * 100)}
             onChange={e => {
               const b = Number(e.target.value) / 100
-              if (b > loopA + 0.02) onChange(loopA, b)
+              if (b > loopA + minGapFraction) onChange(loopA, b)
             }}
             className="w-full"
             style={{

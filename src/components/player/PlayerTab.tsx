@@ -242,9 +242,12 @@ export function PlayerTab() {
                     {Math.floor(m.time / 60)}:{Math.floor(m.time % 60).toString().padStart(2, '0')}
                   </span>
                   <button
-                    onClick={() => seek(m.time)}
+                    onClick={async () => {
+                      seek(m.time)
+                      if (!isPlaying) await togglePlay()
+                    }}
                     className="text-[10px] text-[#444] hover:text-[#888] border border-studio-border px-1.5 py-0.5 rounded font-serif"
-                    title="Aller à ce marqueur"
+                    title="Aller à ce marqueur et lancer la lecture"
                   >
                     ▶
                   </button>
