@@ -21,7 +21,7 @@ export function OrgManager() {
     if (!user || !newName.trim()) return
     setBusy(true); setError('')
     try {
-      const org = await createOrg(newName.trim(), user.id)
+      const org = await createOrg(newName.trim())
       await reload()
       setActiveOrg(org)
       setShowCreate(false)
