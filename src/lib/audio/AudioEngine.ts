@@ -1,18 +1,29 @@
 import type { VoicePart } from '@/types/app.types'
+import {
+  SoundTouch,
+  SimpleFilter,
+  WebAudioBufferSource,
+} from '@soundtouchjs/core'
 
 export interface TrackConfig {
   voice: VoicePart
   url: string
 }
 
+const ST_BUFFER_SIZE = 4096
+
 export class AudioEngine {
   private ctx: AudioContext | null = null
   private buffers: Partial<Record<VoicePart, AudioBuffer>> = {}
   private gainNodes: Partial<Record<VoicePart, GainNode>> = {}
   private masterGain: GainNode | null = null
+
+  // Native sources (rate = 1.0)
   private sources: Partial<Record<VoicePart, AudioBufferSourceNode>> = {}
 
-  // Track volumes separately from mute state so we can restore on unmute
+  // SoundTouch nodes (rate ≠ 1.0) — one ScriptProcessorNode per voice
+  private stNodes: Partial<Record<VoicePart, ScriptProcessorNode>> = {}
+
   private _volumes: Partial<Record<VoicePart, number>> = {}
 
   private _playing = false
@@ -20,8 +31,8 @@ export class AudioEngine {
   private _startOffset = 0    // Offset (seconds) into the audio at play start
   private _playbackRate = 1.0
   private _loopEnabled = false
-  private _loopA = 0          // loop start (0-1 fraction)
-  private _loopB = 1          // loop end (0-1 fraction)
+  private _loopA = 0          // loop start (0–1 fraction)
+  private _loopB = 1          // loop end (0–1 fraction)
 
   private _animFrame: number | null = null
   public onTimeUpdate?: (currentTime: number, duration: number) => void
@@ -59,7 +70,6 @@ export class AudioEngine {
       gain.connect(this.masterGain!)
       this.gainNodes[voice] = gain
     }
-    // Restore volume if previously set
     if (this._volumes[voice] !== undefined) {
       this.gainNodes[voice]!.gain.value = this._volumes[voice]!
     }
@@ -103,39 +113,104 @@ export class AudioEngine {
     const dur = this.duration
     if (dur === 0) return
 
-    // Count active sources; only fire onEnded when ALL have ended
     const bufferEntries = Object.entries(this.buffers) as [VoicePart, AudioBuffer][]
     let activeCount = bufferEntries.length
 
-    for (const [voice, buffer] of bufferEntries) {
-      const gain = this.gainNodes[voice]
-      if (!gain) continue
-
-      const source = ctx.createBufferSource()
-      source.buffer = buffer
-      source.playbackRate.value = this._playbackRate
-      source.connect(gain)
-
-      if (this._loopEnabled) {
-        source.loop = true
-        source.loopStart = this._loopA * dur
-        source.loopEnd   = this._loopB * dur
+    const handleEnd = () => {
+      activeCount--
+      if (activeCount <= 0 && this._playing && !this._loopEnabled) {
+        this._playing = false
+        this._startOffset = 0
+        this._stopAnimation()
+        this.onEnded?.()
       }
-      // FIX: never pass a duration arg when looping (causes RangeError when offset > loopEnd)
-      source.start(0, startOffset)
+    }
 
-      source.onended = () => {
-        activeCount--
-        // Only reset when ALL sources have ended (avoids premature stop when tracks differ in length)
-        if (activeCount <= 0 && this._playing && !this._loopEnabled) {
-          this._playing = false
-          this._startOffset = 0
-          this._stopAnimation()
-          this.onEnded?.()
+    // ── Mode natif (vitesse = 1.0) ─────────────────────────────────────────
+    if (Math.abs(this._playbackRate - 1.0) < 0.001) {
+      for (const [voice, buffer] of bufferEntries) {
+        const gain = this.gainNodes[voice]
+        if (!gain) continue
+
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+        source.playbackRate.value = 1.0
+        source.connect(gain)
+
+        if (this._loopEnabled) {
+          source.loop = true
+          source.loopStart = this._loopA * dur
+          source.loopEnd   = this._loopB * dur
         }
-      }
+        source.start(0, startOffset)
 
-      this.sources[voice] = source
+        source.onended = () => {
+          if (!this._loopEnabled) handleEnd()
+        }
+
+        this.sources[voice] = source
+      }
+    }
+
+    // ── Mode SoundTouch (pitch-correct, vitesse ≠ 1.0) ────────────────────
+    else {
+      const sampleRate      = ctx.sampleRate
+      const loopStartSample = Math.round(this._loopA * dur * sampleRate)
+      const loopEndSample   = Math.round(this._loopB * dur * sampleRate)
+      const scratchBuf      = new Float32Array(ST_BUFFER_SIZE * 2)
+
+      for (const [voice, buffer] of bufferEntries) {
+        const gain = this.gainNodes[voice]
+        if (!gain) continue
+
+        const st = new SoundTouch()
+        // tempo : change la vitesse SANS changer le pitch (WSOLA)
+        st.tempo = this._playbackRate
+
+        const stSource = new WebAudioBufferSource(buffer)
+        const filter   = new SimpleFilter(stSource, st)
+
+        // Positionner à l'offset de départ (en samples)
+        filter.sourcePosition = Math.round(startOffset * sampleRate)
+
+        let ended = false
+
+        const node = ctx.createScriptProcessor(ST_BUFFER_SIZE, 2, 2)
+        node.onaudioprocess = (e) => {
+          if (ended) return
+
+          // ── Gestion de la boucle A/B ────────────────────────────────────
+          if (this._loopEnabled && filter.sourcePosition >= loopEndSample) {
+            // Vider les buffers internes SoundTouch et repositionner au début de la boucle
+            filter.clear()
+            filter.sourcePosition = loopStartSample
+          }
+
+          const left  = e.outputBuffer.getChannelData(0)
+          const right = e.outputBuffer.getChannelData(1)
+          const framesExtracted = filter.extract(scratchBuf, ST_BUFFER_SIZE)
+
+          for (let i = 0; i < framesExtracted; i++) {
+            left[i]  = scratchBuf[i * 2]
+            right[i] = scratchBuf[i * 2 + 1]
+          }
+          // Silence les frames restantes (fin de buffer ou flush SoundTouch)
+          for (let i = framesExtracted; i < ST_BUFFER_SIZE; i++) {
+            left[i]  = 0
+            right[i] = 0
+          }
+
+          // Détection fin de lecture (SoundTouch a flushed tous ses samples)
+          if (!this._loopEnabled && framesExtracted === 0) {
+            ended = true
+            node.disconnect()
+            handleEnd()
+          }
+        }
+
+        node.connect(gain)
+        this.stNodes[voice] = node
+      }
     }
 
     this._startTime   = ctx.currentTime
@@ -172,17 +247,23 @@ export class AudioEngine {
     }
   }
 
-  /** Mute/unmute a voice, restoring the stored volume on unmute */
   setMute(voice: VoicePart, muted: boolean): void {
     if (this.gainNodes[voice]) {
       this.gainNodes[voice]!.gain.value = muted ? 0 : (this._volumes[voice] ?? 1)
     }
   }
 
+  // ── Vitesse (avec correction de pitch via SoundTouch) ─────────────────────
   setPlaybackRate(rate: number): void {
+    const wasPlaying  = this._playing
+    const currentPos  = this.currentTime
     this._playbackRate = rate
-    for (const source of Object.values(this.sources)) {
-      if (source) source.playbackRate.value = rate
+
+    if (wasPlaying) {
+      // Redémarrer depuis la position courante avec le nouveau tempo
+      this._stopSources()
+      this._playing = false
+      this.play(currentPos)
     }
   }
 
@@ -195,15 +276,13 @@ export class AudioEngine {
     this._loopB = b
 
     if (wasPlaying) {
-      // Restart sources immediately with the new loop region.
-      // When loop is enabled, always jump to loopStart so the user hears
-      // the new zone from the beginning right away.
       const loopStart = a * this.duration
       const offset = enabled ? loopStart : prevOffset
       this._stopSources()
       this._playing = false
       this.play(offset)
     } else {
+      // Mise à jour des sources natives actives (quand pas en lecture)
       for (const source of Object.values(this.sources)) {
         if (!source) continue
         source.loop = enabled
@@ -228,15 +307,26 @@ export class AudioEngine {
       try { this.sources[voice]!.stop() } catch { /* ignore */ }
       delete this.sources[voice]
     }
+    if (this.stNodes[voice]) {
+      try { this.stNodes[voice]!.disconnect() } catch { /* ignore */ }
+      delete this.stNodes[voice]
+    }
     delete this.buffers[voice]
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
   private _stopSources(): void {
+    // Arrêt des sources natives
     for (const source of Object.values(this.sources)) {
       try { source?.stop() } catch { /* ignore */ }
     }
     this.sources = {}
+
+    // Déconnexion des nœuds SoundTouch
+    for (const node of Object.values(this.stNodes)) {
+      try { node?.disconnect() } catch { /* ignore */ }
+    }
+    this.stNodes = {}
   }
 
   private _startAnimation(): void {
@@ -263,7 +353,7 @@ export class AudioEngine {
   }
 }
 
-// Singleton engine for the choriste player
+// Singleton engine pour le player choriste
 let _engine: AudioEngine | null = null
 export function getAudioEngine(): AudioEngine {
   if (!_engine) _engine = new AudioEngine()

@@ -5,18 +5,25 @@ import { getSupabaseClient } from '@/lib/supabase/client'
 import { deleteTakeFromStorage } from '@/lib/storage'
 
 export function useTakes(userId: string | undefined, orgId: string | null | undefined) {
-  const [takes, setTakes]   = useState<Take[]>([])
+  const [takes, setTakes]     = useState<Take[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
 
   async function load() {
     if (!userId) { setTakes([]); return }
     setLoading(true)
+    setError(null)
     const sb = getSupabaseClient()
     let query = sb.from('takes').select('*').eq('user_id', userId).order('created_at', { ascending: false })
     if (orgId) query = query.eq('org_id', orgId)
 
-    const { data } = await query
-    setTakes((data as Take[]) ?? [])
+    const { data, error: fetchError } = await query
+    if (fetchError) {
+      setError('Impossible de charger les prises. Vérifiez votre connexion.')
+      setTakes([])
+    } else {
+      setTakes((data as Take[]) ?? [])
+    }
     setLoading(false)
   }
 
@@ -77,5 +84,5 @@ export function useTakes(userId: string | undefined, orgId: string | null | unde
     setTakes(prev => prev.map(t => t.id === take.id ? { ...t, name: newName } : t))
   }
 
-  return { takes, loading, reload: load, saveTake, deleteTake, toggleFavorite, renameTake }
+  return { takes, loading, error, reload: load, saveTake, deleteTake, toggleFavorite, renameTake }
 }

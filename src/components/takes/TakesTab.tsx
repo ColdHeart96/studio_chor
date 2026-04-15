@@ -11,12 +11,21 @@ export function TakesTab() {
   const { user }       = useAuth()
   const { activeOrg }  = useOrgContext()
   const router         = useRouter()
-  const { takes, loading, deleteTake, toggleFavorite, renameTake } = useTakes(user?.id, activeOrg?.id)
+  const { takes, loading, error, deleteTake, toggleFavorite, renameTake } = useTakes(user?.id, activeOrg?.id)
 
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-8 justify-center">
         <Spinner /> <span className="text-sm text-studio-muted">Chargement…</span>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-studio-muted">
+        <div className="text-3xl mb-3">⚠</div>
+        <div className="text-sm text-studio-red">{error}</div>
       </div>
     )
   }
