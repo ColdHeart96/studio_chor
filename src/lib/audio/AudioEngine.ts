@@ -1,38 +1,38 @@
 import type { VoicePart } from '@/types/app.types'
-import {
-  SoundTouch,
-  SimpleFilter,
-  WebAudioBufferSource,
-} from '@soundtouchjs/core'
 
 export interface TrackConfig {
   voice: VoicePart
   url: string
 }
 
-const ST_BUFFER_SIZE = 4096
-
 export class AudioEngine {
   private ctx: AudioContext | null = null
+
+  // Buffers audio décodés — utilisés uniquement pour l'affichage de la forme d'onde
   private buffers: Partial<Record<VoicePart, AudioBuffer>> = {}
+
+  // GainNodes — contrôle volume/mute par voix, communs aux deux modes de lecture
   private gainNodes: Partial<Record<VoicePart, GainNode>> = {}
   private masterGain: GainNode | null = null
 
-  // Native sources (rate = 1.0)
+  // ── Mode natif (vitesse = 1.0) ──────────────────────────────────────────
   private sources: Partial<Record<VoicePart, AudioBufferSourceNode>> = {}
 
-  // SoundTouch nodes (rate ≠ 1.0) — one ScriptProcessorNode per voice
-  private stNodes: Partial<Record<VoicePart, ScriptProcessorNode>> = {}
+  // ── Mode HTMLAudioElement (vitesse ≠ 1.0) ───────────────────────────────
+  // HTMLAudioElement.preservesPitch conserve la tonalité lors des changements de vitesse
+  private audioEls:   Partial<Record<VoicePart, HTMLAudioElement>> = {}
+  private mediaNodes: Partial<Record<VoicePart, MediaElementAudioSourceNode>> = {}
+  private urls:       Partial<Record<VoicePart, string>> = {}
 
   private _volumes: Partial<Record<VoicePart, number>> = {}
 
   private _playing = false
-  private _startTime = 0      // AudioContext time when play started
-  private _startOffset = 0    // Offset (seconds) into the audio at play start
+  private _startTime = 0      // AudioContext.currentTime au démarrage
+  private _startOffset = 0    // Offset (secondes) dans l'audio au démarrage
   private _playbackRate = 1.0
   private _loopEnabled = false
-  private _loopA = 0          // loop start (0–1 fraction)
-  private _loopB = 1          // loop end (0–1 fraction)
+  private _loopA = 0
+  private _loopB = 1
 
   private _animFrame: number | null = null
   public onTimeUpdate?: (currentTime: number, duration: number) => void
@@ -58,13 +58,14 @@ export class AudioEngine {
   async loadTrack(voice: VoicePart, url: string): Promise<void> {
     const ctx = this.getContext()
 
+    // 1. Charger et décoder en AudioBuffer (pour la forme d'onde)
     const resp = await fetch(url)
     if (!resp.ok) throw new Error(`Failed to load track: ${url}`)
     const arrayBuffer = await resp.arrayBuffer()
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-
+    const audioBuffer  = await ctx.decodeAudioData(arrayBuffer)
     this.buffers[voice] = audioBuffer
 
+    // 2. GainNode commun aux deux modes
     if (!this.gainNodes[voice]) {
       const gain = ctx.createGain()
       gain.connect(this.masterGain!)
@@ -72,6 +73,27 @@ export class AudioEngine {
     }
     if (this._volumes[voice] !== undefined) {
       this.gainNodes[voice]!.gain.value = this._volumes[voice]!
+    }
+
+    // 3. Stocker l'URL et préparer l'HTMLAudioElement pour le mode pitch-correct
+    this.urls[voice] = url
+
+    if (!this.audioEls[voice]) {
+      // Créer l'élément et le MediaElementSourceNode une seule fois par voix
+      const audio = new Audio()
+      // crossOrigin doit être défini AVANT src pour que CORS fonctionne
+      audio.crossOrigin = 'anonymous'
+      audio.preload = 'none'
+      audio.src = url
+      this.audioEls[voice] = audio
+
+      // Connecter au graphe Web Audio pour le contrôle de gain/mute par voix
+      const mediaNode = ctx.createMediaElementSource(audio)
+      mediaNode.connect(this.gainNodes[voice]!)
+      this.mediaNodes[voice] = mediaNode
+    } else {
+      // Mettre à jour l'URL si la piste est rechargée (URL signée expirée)
+      this.audioEls[voice]!.src = url
     }
   }
 
@@ -84,7 +106,16 @@ export class AudioEngine {
   }
 
   get currentTime(): number {
-    if (!this._playing || !this.ctx) return this._startOffset
+    if (!this._playing) return this._startOffset
+
+    // Mode HTMLAudioElement : lire directement depuis l'élément audio (plus précis)
+    if (Math.abs(this._playbackRate - 1.0) >= 0.001) {
+      const anyEl = Object.values(this.audioEls).find(Boolean)
+      if (anyEl) return anyEl.currentTime
+    }
+
+    // Mode natif : calculer depuis le temps AudioContext
+    if (!this.ctx) return this._startOffset
     const elapsed = (this.ctx.currentTime - this._startTime) * this._playbackRate
     const rawTime = this._startOffset + elapsed
 
@@ -108,7 +139,6 @@ export class AudioEngine {
     await this.resumeContext()
     if (this._playing) this._stopSources()
 
-    const ctx = this.ctx!
     const startOffset = offset ?? this._startOffset
     const dur = this.duration
     if (dur === 0) return
@@ -126,8 +156,9 @@ export class AudioEngine {
       }
     }
 
-    // ── Mode natif (vitesse = 1.0) ─────────────────────────────────────────
+    // ── Mode natif : AudioBufferSourceNode (vitesse = 1.0) ─────────────────
     if (Math.abs(this._playbackRate - 1.0) < 0.001) {
+      const ctx = this.ctx!
       for (const [voice, buffer] of bufferEntries) {
         const gain = this.gainNodes[voice]
         if (!gain) continue
@@ -150,78 +181,53 @@ export class AudioEngine {
 
         this.sources[voice] = source
       }
+
+      this._startTime   = this.ctx!.currentTime
+      this._startOffset = startOffset
     }
 
-    // ── Mode SoundTouch (pitch-correct, vitesse ≠ 1.0) ────────────────────
+    // ── Mode pitch-correct : HTMLAudioElement + preservesPitch (vitesse ≠ 1.0) ──
     else {
-      const sampleRate      = ctx.sampleRate
-      const loopStartSample = Math.round(this._loopA * dur * sampleRate)
-      const loopEndSample   = Math.round(this._loopB * dur * sampleRate)
-      const scratchBuf      = new Float32Array(ST_BUFFER_SIZE * 2)
+      // Préparer et lancer tous les éléments audio simultanément
+      const playPromises: Promise<void>[] = []
 
-      for (const [voice, buffer] of bufferEntries) {
-        const gain = this.gainNodes[voice]
-        if (!gain) continue
+      for (const [voice] of bufferEntries) {
+        const audio = this.audioEls[voice]
+        if (!audio) continue
 
-        const st = new SoundTouch()
-        // tempo : change la vitesse SANS changer le pitch (WSOLA)
-        st.tempo = this._playbackRate
+        // Positionner et configurer
+        audio.currentTime  = startOffset
+        audio.playbackRate = this._playbackRate
 
-        const stSource = new WebAudioBufferSource(buffer)
-        const filter   = new SimpleFilter(stSource, st)
+        // preservesPitch : conserve la tonalité d'origine malgré le changement de vitesse
+        // Standard W3C — supporté Chrome 86+, Firefox 99+, Safari 14.5+
+        audio.preservesPitch = true
+        ;(audio as unknown as Record<string, unknown>).mozPreservesPitch = true
 
-        // Positionner à l'offset de départ (en samples)
-        filter.sourcePosition = Math.round(startOffset * sampleRate)
-
-        let ended = false
-
-        const node = ctx.createScriptProcessor(ST_BUFFER_SIZE, 2, 2)
-        node.onaudioprocess = (e) => {
-          if (ended) return
-
-          // ── Gestion de la boucle A/B ────────────────────────────────────
-          if (this._loopEnabled && filter.sourcePosition >= loopEndSample) {
-            // Vider les buffers internes SoundTouch et repositionner au début de la boucle
-            filter.clear()
-            filter.sourcePosition = loopStartSample
-          }
-
-          const left  = e.outputBuffer.getChannelData(0)
-          const right = e.outputBuffer.getChannelData(1)
-          const framesExtracted = filter.extract(scratchBuf, ST_BUFFER_SIZE)
-
-          for (let i = 0; i < framesExtracted; i++) {
-            left[i]  = scratchBuf[i * 2]
-            right[i] = scratchBuf[i * 2 + 1]
-          }
-          // Silence les frames restantes (fin de buffer ou flush SoundTouch)
-          for (let i = framesExtracted; i < ST_BUFFER_SIZE; i++) {
-            left[i]  = 0
-            right[i] = 0
-          }
-
-          // Détection fin de lecture (SoundTouch a flushed tous ses samples)
-          if (!this._loopEnabled && framesExtracted === 0) {
-            ended = true
-            node.disconnect()
-            handleEnd()
-          }
+        // Boucle complète gérée via requestAnimationFrame (A/B loop manuel)
+        audio.loop = false
+        audio.onended = () => {
+          if (!this._loopEnabled) handleEnd()
         }
 
-        node.connect(gain)
-        this.stNodes[voice] = node
+        playPromises.push(audio.play().catch(() => {}))
       }
+
+      // Démarrer toutes les voix en même temps (meilleure sync possible)
+      await Promise.all(playPromises)
+
+      this._startOffset = startOffset
     }
 
-    this._startTime   = ctx.currentTime
-    this._startOffset = startOffset
-    this._playing     = true
+    this._playing = true
     this._startAnimation()
   }
 
   pause(): void {
     if (!this._playing) return
-    this._startOffset = this.currentTime
+
+    const pos = this.currentTime
+    this._startOffset = pos
     this._stopSources()
     this._playing = false
     this._stopAnimation()
@@ -229,10 +235,13 @@ export class AudioEngine {
 
   seek(time: number): void {
     const wasPlaying = this._playing
+    const clamped = Math.max(0, Math.min(time, this.duration))
+
     if (this._playing) this._stopSources()
-    this._startOffset = Math.max(0, Math.min(time, this.duration))
+    this._startOffset = clamped
     this._playing = false
-    if (wasPlaying) this.play()
+
+    if (wasPlaying) this.play(clamped)
   }
 
   seekRelative(fraction: number): void {
@@ -253,17 +262,33 @@ export class AudioEngine {
     }
   }
 
-  // ── Vitesse (avec correction de pitch via SoundTouch) ─────────────────────
+  // ── Vitesse avec correction de pitch ─────────────────────────────────────
   setPlaybackRate(rate: number): void {
-    const wasPlaying  = this._playing
-    const currentPos  = this.currentTime
+    const wasNative  = Math.abs(this._playbackRate - 1.0) < 0.001
+    const willNative = Math.abs(rate - 1.0) < 0.001
+    const wasPlaying = this._playing
+    const currentPos = this.currentTime
+
     this._playbackRate = rate
 
     if (wasPlaying) {
-      // Redémarrer depuis la position courante avec le nouveau tempo
-      this._stopSources()
-      this._playing = false
-      this.play(currentPos)
+      if (wasNative !== willNative) {
+        // Changement de mode (natif ↔ HTMLAudioElement) : redémarrer
+        this._stopSources()
+        this._playing = false
+        this.play(currentPos)
+      } else if (!willNative) {
+        // Rester en mode HTMLAudioElement : mettre à jour la vitesse en direct
+        for (const audio of Object.values(this.audioEls)) {
+          if (audio) {
+            audio.playbackRate = rate
+            audio.preservesPitch = true
+            ;(audio as unknown as Record<string, unknown>).mozPreservesPitch = true
+          }
+        }
+      } else {
+        // Rester en mode natif (1.0 → 1.0) : rien à faire
+      }
     }
   }
 
@@ -282,7 +307,7 @@ export class AudioEngine {
       this._playing = false
       this.play(offset)
     } else {
-      // Mise à jour des sources natives actives (quand pas en lecture)
+      // Mise à jour des sources natives actives si pas en lecture
       for (const source of Object.values(this.sources)) {
         if (!source) continue
         source.loop = enabled
@@ -307,11 +332,13 @@ export class AudioEngine {
       try { this.sources[voice]!.stop() } catch { /* ignore */ }
       delete this.sources[voice]
     }
-    if (this.stNodes[voice]) {
-      try { this.stNodes[voice]!.disconnect() } catch { /* ignore */ }
-      delete this.stNodes[voice]
+    if (this.audioEls[voice]) {
+      this.audioEls[voice]!.pause()
+      delete this.audioEls[voice]
+      delete this.mediaNodes[voice]
     }
     delete this.buffers[voice]
+    delete this.urls[voice]
   }
 
   // ── Internal ──────────────────────────────────────────────────────────────
@@ -322,19 +349,38 @@ export class AudioEngine {
     }
     this.sources = {}
 
-    // Déconnexion des nœuds SoundTouch
-    for (const node of Object.values(this.stNodes)) {
-      try { node?.disconnect() } catch { /* ignore */ }
+    // Pause des éléments HTMLAudioElement
+    for (const audio of Object.values(this.audioEls)) {
+      try { audio?.pause() } catch { /* ignore */ }
     }
-    this.stNodes = {}
   }
 
   private _startAnimation(): void {
+    const dur = this.duration
+
     const tick = () => {
       if (!this._playing) return
-      this.onTimeUpdate?.(this.currentTime, this.duration)
+
+      const ct = this.currentTime
+
+      // ── Gestion manuelle de la boucle A/B pour HTMLAudioElement ──────────
+      if (this._loopEnabled && Math.abs(this._playbackRate - 1.0) >= 0.001) {
+        const loopEnd = this._loopB * dur
+        if (ct >= loopEnd) {
+          const loopStart = this._loopA * dur
+          for (const audio of Object.values(this.audioEls)) {
+            if (audio) audio.currentTime = loopStart
+          }
+          this.onTimeUpdate?.(loopStart, dur)
+          this._animFrame = requestAnimationFrame(tick)
+          return
+        }
+      }
+
+      this.onTimeUpdate?.(ct, dur)
       this._animFrame = requestAnimationFrame(tick)
     }
+
     this._animFrame = requestAnimationFrame(tick)
   }
 
