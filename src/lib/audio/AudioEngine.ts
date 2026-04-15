@@ -108,10 +108,21 @@ export class AudioEngine {
   get currentTime(): number {
     if (!this._playing) return this._startOffset
 
-    // Mode HTMLAudioElement : lire directement depuis l'élément audio (plus précis)
+    // Mode HTMLAudioElement : calculer depuis le temps AudioContext (évite le gel
+    // si un élément se termine avant les autres ou stalle)
     if (Math.abs(this._playbackRate - 1.0) >= 0.001) {
-      const anyEl = Object.values(this.audioEls).find(Boolean)
-      if (anyEl) return anyEl.currentTime
+      if (!this.ctx) return this._startOffset
+      const elapsed = (this.ctx.currentTime - this._startTime) * this._playbackRate
+      const rawTime = this._startOffset + elapsed
+      if (this._loopEnabled && this.duration > 0) {
+        const loopStart = this._loopA * this.duration
+        const loopEnd   = this._loopB * this.duration
+        const loopLen   = loopEnd - loopStart
+        if (rawTime >= loopEnd && loopLen > 0) {
+          return loopStart + ((rawTime - loopStart) % loopLen)
+        }
+      }
+      return Math.min(rawTime, this.duration)
     }
 
     // Mode natif : calculer depuis le temps AudioContext
@@ -216,6 +227,7 @@ export class AudioEngine {
       // Démarrer toutes les voix en même temps (meilleure sync possible)
       await Promise.all(playPromises)
 
+      this._startTime   = this.ctx!.currentTime
       this._startOffset = startOffset
     }
 
