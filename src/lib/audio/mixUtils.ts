@@ -36,7 +36,9 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
 
 /**
  * Render voice blob + selected backing tracks into a single WAV using OfflineAudioContext.
- * Returns a WAV Blob. Falls back to the original voiceBlob if no backing tracks are present.
+ * voiceOffset: seconds into the backing track where the voice recording starts.
+ *   > 0 → back track plays from voiceOffset, voice plays from 0
+ *   < 0 → voice trimmed by |voiceOffset|, back track plays from 0
  */
 export async function renderMix(
   voiceBlob: Blob,
@@ -46,26 +48,30 @@ export async function renderMix(
     voiceVol: number
     activeVoices: Set<VoicePart>
     trackVolumes: Partial<Record<VoicePart, number>>
+    voiceOffset?: number
   },
 ): Promise<{ blob: Blob; mimeType: string }> {
-  const { hearVoice, voiceVol, activeVoices, trackVolumes } = options
+  const { hearVoice, voiceVol, activeVoices, trackVolumes, voiceOffset = 0 } = options
   const activeTracks = VOICE_PARTS.filter(v => activeVoices.has(v) && engine.getBuffer(v))
 
-  // Nothing to mix — return voice blob as-is
   if (!hearVoice && activeTracks.length === 0) {
-    return { blob: voiceBlob, mimeType: voiceBlob.type || 'audio/mp4' }
+    return { blob: voiceBlob, mimeType: voiceBlob.type || 'audio/wav' }
   }
 
   try {
     const mainCtx    = engine.getContext()
     const voiceBuf   = await mainCtx.decodeAudioData(await voiceBlob.arrayBuffer())
-    const duration   = voiceBuf.duration
     const sampleRate = voiceBuf.sampleRate
-    const numCh      = 2  // stereo output to preserve track quality
+    const numCh      = 2
 
-    const offCtx = new OfflineAudioContext(numCh, Math.ceil(duration * sampleRate), sampleRate)
+    // backingStart: where in the backing track audio begins (skip first N seconds)
+    // voiceTrim: how many seconds to cut from voice start (if voiceOffset negative)
+    const backingStart = Math.max(0,  voiceOffset)
+    const voiceTrim    = Math.max(0, -voiceOffset)
+    const mixDuration  = voiceBuf.duration - voiceTrim
 
-    // Voice (only if enabled in review)
+    const offCtx = new OfflineAudioContext(numCh, Math.ceil(mixDuration * sampleRate), sampleRate)
+
     if (hearVoice) {
       const vGain = offCtx.createGain()
       vGain.gain.value = voiceVol
@@ -73,10 +79,9 @@ export async function renderMix(
       const vSrc = offCtx.createBufferSource()
       vSrc.buffer = voiceBuf
       vSrc.connect(vGain)
-      vSrc.start(0)
+      vSrc.start(0, voiceTrim)
     }
 
-    // Backing tracks checked in review, limited to voice recording duration
     for (const v of activeTracks) {
       const buf = engine.getBuffer(v)!
       const g   = offCtx.createGain()
@@ -84,14 +89,14 @@ export async function renderMix(
       g.connect(offCtx.destination)
       const src = offCtx.createBufferSource()
       src.buffer = buf
-      src.start(0, 0, duration)
       src.connect(g)
+      src.start(0, backingStart, mixDuration)
     }
 
     const rendered = await offCtx.startRendering()
     return { blob: audioBufferToWav(rendered), mimeType: 'audio/wav' }
   } catch (err) {
     console.warn('renderMix failed, falling back to voice only', err)
-    return { blob: voiceBlob, mimeType: voiceBlob.type || 'audio/mp4' }
+    return { blob: voiceBlob, mimeType: 'audio/wav' }
   }
 }

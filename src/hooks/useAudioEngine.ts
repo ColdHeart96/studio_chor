@@ -16,6 +16,11 @@ export function useAudioEngine() {
   // Ref always up-to-date (frame-perfect, no React batching delay)
   const timeRef = useRef<{ t: number; d: number }>({ t: 0, d: 0 })
 
+  // Throttle le changement de rate à 1 fois par frame (RAF) pour éviter
+  // les grésillements causés par des dizaines d'événements slider par seconde
+  const pendingRateRef = useRef<number | null>(null)
+  const rateRafRef     = useRef<number | null>(null)
+
   useEffect(() => {
     engine.onTimeUpdate = (t, d) => {
       timeRef.current = { t, d }
@@ -27,9 +32,14 @@ export function useAudioEngine() {
       setIsPlaying(false)
       setCurrentTime(0)
     }
+    engine.onReset = () => {
+      setIsPlaying(false)
+    }
     return () => {
       engine.onTimeUpdate = undefined
       engine.onEnded = undefined
+      engine.onReset = undefined
+      if (rateRafRef.current !== null) cancelAnimationFrame(rateRafRef.current)
     }
   }, [engine])
 
@@ -63,7 +73,16 @@ export function useAudioEngine() {
 
   const setSpeed = useCallback((pct: number) => {
     setSpeedState(pct)
-    engine.setPlaybackRate(pct / 100)
+    pendingRateRef.current = pct / 100
+    if (rateRafRef.current === null) {
+      rateRafRef.current = requestAnimationFrame(() => {
+        if (pendingRateRef.current !== null) {
+          engine.setPlaybackRate(pendingRateRef.current)
+          pendingRateRef.current = null
+        }
+        rateRafRef.current = null
+      })
+    }
   }, [engine])
 
   const setLoop = useCallback((enabled: boolean, a?: number, b?: number) => {

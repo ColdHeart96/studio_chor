@@ -1,12 +1,12 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrgContext } from '@/contexts/OrgContext'
 import { useRecorder } from '@/hooks/useRecorder'
 import { useTracks } from '@/hooks/useTracks'
 import { useTakes } from '@/hooks/useTakes'
 import { uploadTake } from '@/lib/storage'
-import { renderMix } from '@/lib/audio/mixUtils'
+import { renderMix, audioBufferToWav } from '@/lib/audio/mixUtils'
 import { formatTime } from '@/lib/utils'
 import { getAudioEngine } from '@/lib/audio/AudioEngine'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
@@ -24,7 +24,7 @@ export function RecordTab() {
   const { activeOrg } = useOrgContext()
   const { saveTake }  = useTakes(user?.id, activeOrg?.id)
   const {
-    state, countdown, elapsed, stream, blob, mimeType, error,
+    state, countdown, elapsed, stream, pcmData, error,
     startCountdown, stopRecording, restartRecording, discardRecording,
   } = useRecorder()
 
@@ -51,53 +51,65 @@ export function RecordTab() {
   const trackVolumesRef = useRef(trackVolumes)
   trackVolumesRef.current = trackVolumes
 
-  // Load tracks into engine when list changes; init selection to all
+  // Load tracks into engine when list changes; remove stale tracks from previous org
   useEffect(() => {
-    if (!tracks.length) return
+    const newVoiceParts = new Set(tracks.map(t => t.voice_part))
+    for (const v of VOICE_PARTS) {
+      if (!newVoiceParts.has(v) && engine.hasBuffer(v)) {
+        engine.removeTrack(v)
+      }
+    }
+    if (!tracks.length) {
+      setLoadedTracks({})
+      setSelectedVoices(new Set())
+      return
+    }
     setSelectedVoices(new Set(tracks.map(t => t.voice_part)))
 
-    async function loadMissing() {
+    async function loadAll() {
       setLoadingTrack(true)
       const next: Partial<Record<VoicePart, Track>> = {}
       for (const track of tracks) {
         if (!track.url) continue
-        if (!engine.hasBuffer(track.voice_part)) {
-          try { await engine.loadTrack(track.voice_part, track.url) } catch { continue }
-        }
+        // Always reload — URL may have changed when org changed
+        try { await engine.loadTrack(track.voice_part, track.url) } catch { continue }
         next[track.voice_part] = track
       }
       setLoadedTracks(next)
       setLoadingTrack(false)
     }
-    loadMissing()
+    loadAll()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length])
+  }, [tracks])
 
   const [isPreviewing, setIsPreviewing] = useState(false)
 
-  // Stop preview when leaving idle state
+  // Stoppe la prévisualisation quand on quitte l'état idle.
+  // Ne pause PAS l'engine en état 'recording' : l'engine est déjà lancé
+  // par onBeforeRecord avant que recorder.start() ne soit appelé.
   useEffect(() => {
-    if (state !== 'idle') {
-      setIsPreviewing(false)
+    if (state === 'idle') return
+    setIsPreviewing(false)
+    if (state !== 'recording') {
       try { engine.pause() } catch { /* ignore */ }
     }
   }, [state, engine])
 
-  // Start / stop backing tracks when recording state changes
-  useEffect(() => {
-    if (state === 'recording') {
-      const sel = selectedVoicesRef.current
-      const vols = trackVolumesRef.current
-      for (const v of VOICE_PARTS) {
-        engine.setVolume(v, sel.has(v) ? (vols[v] ?? 0.8) : 0)
-      }
-      engine.seek(0)
-      engine.setLoop(false)   // no loop during recording — tracks play once and stop
-      engine.play().catch(() => {})
-    } else if (state === 'reviewing') {
-      try { engine.pause() } catch { /* ignore */ }
+  // Callback exécuté juste avant recorder.start() : démarre l'engine en sync
+  // échantillon-précis via AudioBufferSourceNode (pas HTMLAudioElement).
+  // HTMLAudio.play() a une latence imprévisible (50–500 ms) avant que l'audio
+  // ne soit réellement audible → recorder.start() peut être appelé trop tôt
+  // (voix en avance) ou trop tard (voix en retard).
+  // playSynced() planifie tous les sources sur le clock du AudioContext et
+  // attend exactement le moment de démarrage avant de retourner.
+  const onBeforeRecord = useCallback(async () => {
+    const sel = selectedVoicesRef.current
+    const vols = trackVolumesRef.current
+    for (const v of VOICE_PARTS) {
+      engine.setVolume(v, sel.has(v) ? (vols[v] ?? 0.8) : 0)
     }
-  }, [state, engine])
+    await engine.playSynced()
+  }, [engine])
 
   function togglePreview() {
     if (isPreviewing) {
@@ -139,11 +151,20 @@ export function RecordTab() {
     voiceVol: number
     activeVoices: Set<VoicePart>
     trackVolumes: Partial<Record<VoicePart, number>>
+    finalOffset: number
   }) {
-    if (!blob || !user) return
+    if (!pcmData || !user) return
     setSaveError('')
     try {
-      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(blob, engine, reviewState)
+      // Build AudioBuffer from raw PCM, encode to WAV, then mix with backing tracks
+      const ctx = engine.getContext()
+      const voiceBuf = ctx.createBuffer(1, pcmData.samples.length, pcmData.sampleRate)
+      voiceBuf.copyToChannel(pcmData.samples, 0)
+      const voiceWav = audioBufferToWav(voiceBuf)
+      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(voiceWav, engine, {
+        ...reviewState,
+        voiceOffset: reviewState.finalOffset,
+      })
       const path = await uploadTake(user.id, mixedBlob, mixMime)
       await saveTake({
         name:            `Prise ${new Date().toLocaleDateString('fr-FR')}`,
@@ -221,12 +242,13 @@ export function RecordTab() {
   }
 
   // ── Review ─────────────────────────────────────────────────────────────────
-  if (state === 'reviewing' && blob) {
+  if (state === 'reviewing' && pcmData) {
     return (
       <div>
         {saveError && <p className="text-xs text-studio-red mb-3">{saveError}</p>}
         <ReviewPanel
-          blob={blob}
+          pcmData={pcmData}
+          structuralDelay={engine.recordingOffset}
           elapsed={elapsed}
           engine={engine}
           loadedTracks={loadedTracks}
@@ -416,7 +438,7 @@ export function RecordTab() {
         }
       </div>
 
-      <Button variant="red" size="lg" onClick={() => startCountdown(audioMode)}>
+      <Button variant="red" size="lg" onClick={() => startCountdown(audioMode, onBeforeRecord)}>
         ⏺ &nbsp;Démarrer l&apos;enregistrement
       </Button>
     </div>

@@ -41,38 +41,34 @@ export function PlayerTab() {
   // ── Mix state (volume / mute / solo) ──────────────────────────────────────
   const [mixState, setMixState] = useState<MixStateMap>(DEFAULT_MIX)
 
-  // Apply mix state to engine: compute effective gain for each voice
+  // Apply mix state to engine.
+  // Utilise setVolume pour stocker le vrai volume, puis setMute pour le silence
+  // (évite d'écraser _volumes avec 0 ce qui corromprait la restauration lors du unmute)
   const applyMix = useCallback((next: MixStateMap) => {
     const anySolo = VOICE_PARTS.some(v => next[v].solo)
     for (const v of VOICE_PARTS) {
       const { volume, muted, solo } = next[v]
-      const effective = (muted || (anySolo && !solo)) ? 0 : volume
-      engine.setVolume(v as VoicePart, effective)
+      engine.setVolume(v as VoicePart, volume)
+      engine.setMute(v as VoicePart, muted || (anySolo && !solo))
     }
   }, [engine])
 
   function handleVolumeChange(voice: VoicePart, vol: number) {
-    setMixState(prev => {
-      const next = { ...prev, [voice]: { ...prev[voice], volume: vol } }
-      applyMix(next)
-      return next
-    })
+    const next = { ...mixState, [voice]: { ...mixState[voice], volume: vol } }
+    setMixState(next)
+    applyMix(next)
   }
 
   function handleMuteToggle(voice: VoicePart) {
-    setMixState(prev => {
-      const next = { ...prev, [voice]: { ...prev[voice], muted: !prev[voice].muted, solo: false } }
-      applyMix(next)
-      return next
-    })
+    const next = { ...mixState, [voice]: { ...mixState[voice], muted: !mixState[voice].muted, solo: false } }
+    setMixState(next)
+    applyMix(next)
   }
 
   function handleSoloToggle(voice: VoicePart) {
-    setMixState(prev => {
-      const next = { ...prev, [voice]: { ...prev[voice], solo: !prev[voice].solo, muted: false } }
-      applyMix(next)
-      return next
-    })
+    const next = { ...mixState, [voice]: { ...mixState[voice], solo: !mixState[voice].solo, muted: false } }
+    setMixState(next)
+    applyMix(next)
   }
 
   // ── Markers ───────────────────────────────────────────────────────────────
@@ -102,7 +98,22 @@ export function PlayerTab() {
   const hasLoaded = Object.keys(loadedTracks).length > 0
 
   useEffect(() => {
-    if (!tracks.length) return
+    // Stop playback and remove any track that is no longer in the new list
+    engine.pause()
+    const newVoiceParts = new Set(tracks.map(t => t.voice_part))
+    for (const v of VOICE_PARTS) {
+      if (!newVoiceParts.has(v) && engine.hasBuffer(v)) {
+        engine.removeTrack(v)
+        setPeaksMap(prev  => { const n = { ...prev };  delete n[v]; return n })
+        setLoadedTracks(prev => { const n = { ...prev }; delete n[v]; return n })
+      }
+    }
+    if (!tracks.length) {
+      setLoadedTracks({})
+      setPeaksMap({})
+      setStatus('Aucune piste chargée')
+      return
+    }
     async function loadAll() {
       for (const track of tracks) {
         if (!track.url) continue
@@ -121,8 +132,11 @@ export function PlayerTab() {
       }
       setLoadingTrack(null)
       setStatus('Prêt')
+      // Reset position so the player starts at 0 with the correct duration
+      engine.resetPosition()
     }
     loadAll()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks, engine])
 
   function handleSeekBarClick(e: React.MouseEvent<HTMLDivElement>) {

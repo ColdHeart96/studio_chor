@@ -5,7 +5,9 @@ import {
   requestMicrophoneAccess,
   type RecorderState,
   type AudioMode,
+  type RecordingData,
 } from '@/lib/audio/recorder'
+import { getAudioEngine } from '@/lib/audio/AudioEngine'
 import { COUNTDOWN_SECONDS, MAX_RECORDING_SECONDS } from '@/lib/constants'
 
 export function useRecorder() {
@@ -13,8 +15,7 @@ export function useRecorder() {
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS)
   const [elapsed, setElapsed]     = useState(0)
   const [stream, setStream]       = useState<MediaStream | null>(null)
-  const [blob, setBlob]           = useState<Blob | null>(null)
-  const [mimeType, setMimeType]   = useState('audio/mp4')
+  const [pcmData, setPcmData]     = useState<RecordingData | null>(null)
   const [error, setError]         = useState<string | null>(null)
 
   const recorderRef    = useRef<VocalRecorder | null>(null)
@@ -30,19 +31,27 @@ export function useRecorder() {
     clearTimers()
     recorderRef.current?.destroy()
     stream?.getTracks().forEach(t => t.stop())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function startCountdown(audioMode: AudioMode = 'headphones') {
+  // onBeforeRecord : callback async exécuté juste avant recorder.start().
+  // Permet à RecordTab de démarrer l'engine et d'attendre qu'il joue vraiment
+  // avant que le micro ne commence à capturer → synchronisation parfaite.
+  async function startCountdown(
+    audioMode: AudioMode = 'headphones',
+    onBeforeRecord?: () => Promise<void>,
+  ) {
     setError(null)
     try {
       // Must request mic inside user gesture (iOS requirement)
       const s = await requestMicrophoneAccess(audioMode)
       setStream(s)
 
+      // Get (or create) the AudioContext — must be in the user gesture scope
+      const ctx = getAudioEngine().getContext()
       const recorder = new VocalRecorder()
-      await recorder.init(s)
+      await recorder.init(s, ctx)
       recorderRef.current = recorder
-      setMimeType(recorder.mimeType)
 
       setState('countdown')
       setCountdown(COUNTDOWN_SECONDS)
@@ -53,10 +62,16 @@ export function useRecorder() {
         setCountdown(count)
         if (count <= 0) {
           clearInterval(countdownTimer.current!)
-          beginRecording(recorder)
+          if (onBeforeRecord) {
+            onBeforeRecord()
+              .then(() => beginRecording(recorder))
+              .catch(() => beginRecording(recorder))
+          } else {
+            beginRecording(recorder)
+          }
         }
       }, 1000)
-    } catch (err: unknown) {
+    } catch {
       setError('Accès au micro refusé. Autorisez le microphone dans les réglages.')
       setState('idle')
     }
@@ -78,8 +93,8 @@ export function useRecorder() {
   async function stopRecording() {
     clearTimers()
     if (!recorderRef.current) return
-    const recorded = await recorderRef.current.stop()
-    setBlob(recorded)
+    const data = await recorderRef.current.stop()
+    setPcmData(data)
     setState('reviewing')
   }
 
@@ -87,7 +102,7 @@ export function useRecorder() {
     clearTimers()
     recorderRef.current?.destroy()
     recorderRef.current = null
-    setBlob(null)
+    setPcmData(null)
     stream?.getTracks().forEach(t => t.stop())
     setStream(null)
     setState('idle')
@@ -103,8 +118,7 @@ export function useRecorder() {
     countdown,
     elapsed,
     stream,
-    blob,
-    mimeType,
+    pcmData,
     error,
     startCountdown,
     stopRecording,
