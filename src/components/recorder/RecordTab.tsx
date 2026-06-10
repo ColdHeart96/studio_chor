@@ -136,11 +136,12 @@ export function RecordTab() {
     voiceVol: number
     activeVoices: Set<VoicePart>
     trackVolumes: Partial<Record<VoicePart, number>>
+    voiceBlob: Blob   // voice blob with delay applied (from ReviewPanel)
   }) {
-    if (!blob || !user) return
+    if (!user) return
     setSaveError('')
     try {
-      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(blob, engine, reviewState)
+      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(reviewState.voiceBlob, engine, reviewState)
       const path = await uploadTake(user.id, mixedBlob, mixMime)
       await saveTake({
         name:            `Prise ${new Date().toLocaleDateString('fr-FR')}`,

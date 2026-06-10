@@ -2,8 +2,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { formatTime } from '@/lib/utils'
-import { extractPeaks } from '@/lib/audio/waveformUtils'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
+import { audioBufferToWav } from '@/lib/audio/mixUtils'
 import type { AudioEngine } from '@/lib/audio/AudioEngine'
 import type { VoicePart, Track } from '@/types/app.types'
 
@@ -19,6 +19,7 @@ interface ReviewPanelProps {
     voiceVol: number
     activeVoices: Set<VoicePart>
     trackVolumes: Partial<Record<VoicePart, number>>
+    voiceBlob: Blob   // voice blob with delay applied (WAV)
   }) => Promise<void>
   onRetry: () => void
   onDiscard: () => void
@@ -36,6 +37,11 @@ export function ReviewPanel({
   // ── Voice controls ────────────────────────────────────────────────────────
   const [hearVoice, setHearVoice] = useState(true)
   const [voiceVol, setVoiceVol]   = useState(1.0)   // 0–1.5
+
+  // Voice delay (ms): adds silence at the start of the voice to compensate for
+  // MediaRecorder startup delay. Default 0 — adjust if voice plays "ahead" of
+  // the tracks (typically needed with wired headphones).
+  const [voiceDelayMs, setVoiceDelayMs] = useState(0)
 
   // ── Track toggles: only tracks used during recording, all ON by default ──
   const [trackOn, setTrackOn] = useState<Partial<Record<VoicePart, boolean>>>(() => {
@@ -111,6 +117,23 @@ export function ReviewPanel({
   // Redraw when toggles change
   useEffect(() => { drawWaveform() }, [hearVoice, trackOn])
 
+  // Returns a new buffer with `padSeconds` of silence prepended, or the original
+  // buffer if padSeconds <= 0. Used to delay the voice for sync compensation.
+  function padBufferStart(original: AudioBuffer, padSeconds: number): AudioBuffer {
+    if (padSeconds <= 0) return original
+    const ctx = engine.getContext()
+    const padSamples = Math.round(padSeconds * original.sampleRate)
+    const padded = ctx.createBuffer(
+      original.numberOfChannels,
+      original.length + padSamples,
+      original.sampleRate,
+    )
+    for (let c = 0; c < original.numberOfChannels; c++) {
+      padded.getChannelData(c).set(original.getChannelData(c), padSamples)
+    }
+    return padded
+  }
+
   // ── Audio helpers ─────────────────────────────────────────────────────────
   function _stopAll() {
     for (const s of sourcesRef.current) { try { s.stop() } catch { /* ignore */ } }
@@ -120,12 +143,15 @@ export function ReviewPanel({
 
   // Matches index.html startReviewPlay() exactly
   async function startReviewPlay() {
-    const voiceBuf = voiceBufferRef.current
-    if (!voiceBuf) return
+    const original = voiceBufferRef.current
+    if (!original) return
     // iOS: always await resume — context may be suspended even if state reports 'running'
     await engine.resumeContext()
     const aac = engine.getContext()
     _stopAll()
+
+    // Apply voice delay (pads start with silence to fix "voice ahead" issue)
+    const voiceBuf = padBufferStart(original, voiceDelayMs / 1000)
 
     const newSources: AudioBufferSourceNode[] = []
     voiceGainNodeRef.current = null
@@ -198,10 +224,14 @@ export function ReviewPanel({
   }
 
   async function handleSave() {
+    if (!voiceBufferRef.current) return
     setSaving(true)
     const activeVoices = new Set(VOICE_PARTS.filter(v => trackOn[v]))
     try {
-      await onSave({ hearVoice, voiceVol, activeVoices, trackVolumes })
+      // Apply the delay to the saved voice (pad with silence)
+      const paddedBuf = padBufferStart(voiceBufferRef.current, voiceDelayMs / 1000)
+      const voiceBlob = audioBufferToWav(paddedBuf)
+      await onSave({ hearVoice, voiceVol, activeVoices, trackVolumes, voiceBlob })
     } finally { setSaving(false) }
   }
 
@@ -278,6 +308,26 @@ export function ReviewPanel({
           <span className="text-[12px] w-9 text-right tabular-nums" style={{ color: '#4ADE80' }}>
             {Math.round(voiceVol * 100)}%
           </span>
+        </div>
+
+        {/* ── Voice sync slider (compensate "voice ahead" with headphones) ─── */}
+        <div className="flex items-center gap-3 px-3 py-2 mb-2">
+          <span className="text-[11px] text-studio-muted uppercase tracking-wide w-16">Sync voix</span>
+          <input
+            type="range" min={0} max={300} step={10}
+            value={voiceDelayMs}
+            onChange={e => { stopReviewPlay(); setVoiceDelayMs(parseInt(e.target.value)) }}
+            className="flex-1 h-[3px] rounded accent-[#E8C547]"
+            style={{
+              background: `linear-gradient(90deg,#E8C547 ${(voiceDelayMs/300)*100}%,#2a2418 ${(voiceDelayMs/300)*100}%)`
+            }}
+          />
+          <span className="text-[12px] w-9 text-right tabular-nums" style={{ color: '#E8C547' }}>
+            {voiceDelayMs}ms
+          </span>
+        </div>
+        <div className="text-[10px] text-studio-muted px-3 mb-2 leading-snug">
+          Augmenter si votre voix s&apos;entend trop tôt par rapport aux pistes (typique avec un casque branché).
         </div>
 
         {/* ── Track toggles ────────────────────────────────────────────────── */}
