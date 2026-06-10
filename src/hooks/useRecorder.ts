@@ -73,13 +73,18 @@ export function useRecorder() {
     }
   }
 
-  async function beginRecording(recorder: VocalRecorder, onBeforeRecord?: () => Promise<void>) {
-    // Start backing tracks FIRST so the recorder captures them in sync
-    if (onBeforeRecord) await onBeforeRecord()
-    if (recorder.isRecording) return  // guard: async gap may have triggered a second call
-    recorder.start()
+  function beginRecording(recorder: VocalRecorder, onBeforeRecord?: () => Promise<void>) {
+    // Start recorder FIRST so we capture the user's first notes.
+    // If we waited for engine.play() to finish, the engine's resume + scheduling
+    // delay (50-300ms) would make us miss the start of the singing — in playback
+    // the voice would appear "ahead" of the track because the recording starts
+    // mid-phrase.
+    try { recorder.start() } catch { return }
     setState('recording')
     setElapsed(0)
+
+    // Start backing tracks in parallel — they catch up within ~50ms
+    if (onBeforeRecord) onBeforeRecord().catch(() => {})
 
     let secs = 0
     elapsedTimer.current = setInterval(() => {

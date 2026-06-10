@@ -413,7 +413,13 @@ export function RecordTab() {
         }
       </div>
 
-      <Button variant="red" size="lg" onClick={() => startCountdown(audioMode, onBeforeRecord)}>
+      <Button variant="red" size="lg" onClick={() => {
+        // Pre-warm AudioContext inside the user gesture so engine.play() is instant
+        // when the countdown ends — avoids 50-300ms resume delay that would delay
+        // backing tracks relative to the voice.
+        try { engine.getContext().resume().catch(() => {}) } catch { /* ignore */ }
+        startCountdown(audioMode, onBeforeRecord)
+      }}>
         ⏺ &nbsp;Démarrer l&apos;enregistrement
       </Button>
     </div>
