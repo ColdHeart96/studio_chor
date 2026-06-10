@@ -7,7 +7,6 @@
  */
 
 export type RecorderState = 'idle' | 'countdown' | 'recording' | 'reviewing'
-export type AudioMode = 'headphones' | 'speakers'
 
 /**
  * Returns the best supported MIME type for recording audio,
@@ -27,16 +26,15 @@ export function getSupportedMimeType(): string {
 
 /**
  * Request microphone access. Must be called inside a user gesture on iOS.
- * - headphones: echo cancellation OFF → natural voice, no feedback risk
- * - speakers:   echo cancellation ON  → isolates voice from speaker bleed
+ * Echo cancellation / noise suppression / AGC are OFF — this preserves
+ * natural sync between voice and the backing track captured via speaker bleed.
  */
-export async function requestMicrophoneAccess(mode: AudioMode = 'headphones'): Promise<MediaStream> {
-  const isHeadphones = mode === 'headphones'
+export async function requestMicrophoneAccess(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     audio: {
-      echoCancellation: !isHeadphones,
-      noiseSuppression: !isHeadphones,
-      autoGainControl:  !isHeadphones,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl:  false,
       channelCount: 1,
       sampleRate: 44100,
     },

@@ -17,7 +17,6 @@ import { VUMeter } from '@/components/recorder/VUMeter'
 import { CountdownOverlay } from '@/components/recorder/CountdownOverlay'
 import { ReviewPanel } from '@/components/recorder/ReviewPanel'
 import type { VoicePart, Track } from '@/types/app.types'
-import type { AudioMode } from '@/lib/audio/recorder'
 
 export function RecordTab() {
   const { user }      = useAuth()
@@ -31,7 +30,6 @@ export function RecordTab() {
   const { tracks, loading: tracksLoading } = useTracks(activeOrg?.id)
   const engine = getAudioEngine()
 
-  const [audioMode, setAudioMode] = useState<AudioMode>('headphones')
   const [selectedVoices, setSelectedVoices] = useState<Set<VoicePart>>(new Set())
   const [loadedTracks, setLoadedTracks]     = useState<Partial<Record<VoicePart, Track>>>({})
   const [loadingTrack, setLoadingTrack]     = useState(false)
@@ -136,12 +134,11 @@ export function RecordTab() {
     voiceVol: number
     activeVoices: Set<VoicePart>
     trackVolumes: Partial<Record<VoicePart, number>>
-    voiceBlob: Blob   // voice blob with delay applied (from ReviewPanel)
   }) {
-    if (!user) return
+    if (!blob || !user) return
     setSaveError('')
     try {
-      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(reviewState.voiceBlob, engine, reviewState)
+      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(blob, engine, reviewState)
       const path = await uploadTake(user.id, mixedBlob, mixMime)
       await saveTake({
         name:            `Prise ${new Date().toLocaleDateString('fr-FR')}`,
@@ -365,61 +362,12 @@ export function RecordTab() {
         </div>
       )}
 
-      {/* ── Mode audio ─────────────────────────────────────────────────────── */}
-      <SectionLabel>Mode d&apos;écoute</SectionLabel>
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <button
-          onClick={() => setAudioMode('headphones')}
-          className="p-3.5 rounded-xl border transition-all text-center"
-          style={audioMode === 'headphones'
-            ? { border: '2px solid #E8C547', background: '#E8C54718' }
-            : { border: '1px solid #2a2418', background: 'transparent' }
-          }
-        >
-          <div className="text-2xl mb-1.5">🎧</div>
-          <div className="text-[13px] font-bold mb-0.5" style={{ color: audioMode === 'headphones' ? '#E8C547' : '#666' }}>
-            Casque
-          </div>
-          <div className="text-[10px] leading-snug" style={{ color: audioMode === 'headphones' ? '#A89050' : '#444' }}>
-            Qualité maximale<br />Recommandé
-          </div>
-        </button>
-        <button
-          onClick={() => setAudioMode('speakers')}
-          className="p-3.5 rounded-xl border transition-all text-center"
-          style={audioMode === 'speakers'
-            ? { border: '2px solid #47A8E8', background: '#47A8E818' }
-            : { border: '1px solid #2a2418', background: 'transparent' }
-          }
-        >
-          <div className="text-2xl mb-1.5">🔊</div>
-          <div className="text-[13px] font-bold mb-0.5" style={{ color: audioMode === 'speakers' ? '#47A8E8' : '#666' }}>
-            Haut-parleurs
-          </div>
-          <div className="text-[10px] leading-snug" style={{ color: audioMode === 'speakers' ? '#7AAAC0' : '#444' }}>
-            Annulation écho<br />Qualité réduite
-          </div>
-        </button>
-      </div>
-      <div
-        className="text-[12px] leading-relaxed px-3.5 py-2.5 rounded-lg mb-5"
-        style={audioMode === 'headphones'
-          ? { background: '#1a1408', border: '1px solid #E8C54722', color: '#A89050' }
-          : { background: '#0a1520', border: '1px solid #47A8E822', color: '#7AAAC0' }
-        }
-      >
-        {audioMode === 'headphones'
-          ? <>🎧 <strong style={{ color: '#E8C547' }}>Mode casque actif</strong> — Annulation d&apos;écho désactivée pour une voix naturelle. Assurez-vous que votre casque est branché.</>
-          : <>🔊 <strong style={{ color: '#47A8E8' }}>Mode haut-parleurs actif</strong> — Annulation d&apos;écho activée. Votre voix sera légèrement moins naturelle mais mieux isolée des pistes.</>
-        }
-      </div>
-
       <Button variant="red" size="lg" onClick={() => {
         // Pre-warm AudioContext inside the user gesture so engine.play() is instant
         // when the countdown ends — avoids 50-300ms resume delay that would delay
         // backing tracks relative to the voice.
         try { engine.getContext().resume().catch(() => {}) } catch { /* ignore */ }
-        startCountdown(audioMode, onBeforeRecord)
+        startCountdown(onBeforeRecord)
       }}>
         ⏺ &nbsp;Démarrer l&apos;enregistrement
       </Button>

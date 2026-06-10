@@ -4,7 +4,6 @@ import {
   VocalRecorder,
   requestMicrophoneAccess,
   type RecorderState,
-  type AudioMode,
 } from '@/lib/audio/recorder'
 import { COUNTDOWN_SECONDS, MAX_RECORDING_SECONDS } from '@/lib/constants'
 
@@ -36,12 +35,12 @@ export function useRecorder() {
 
   // onBeforeRecord: called just before recorder.start().
   // Should start the backing tracks and return when ready.
-  async function startCountdown(audioMode: AudioMode = 'headphones', onBeforeRecord?: () => Promise<void>) {
+  async function startCountdown(onBeforeRecord?: () => Promise<void>) {
     if (busyRef.current) return  // prevent double-tap
     busyRef.current = true
     setError(null)
     try {
-      const s = await requestMicrophoneAccess(audioMode)
+      const s = await requestMicrophoneAccess()
       setStream(s)
 
       const recorder = new VocalRecorder()
