@@ -66,6 +66,7 @@ export class VocalRecorder {
 
   start(): void {
     if (!this.mediaRecorder) throw new Error('VocalRecorder not initialized')
+    if (this.mediaRecorder.state === 'recording') return  // guard against double-start
     this.chunks = []
     // timeslice=250ms: CRITICAL for iOS Safari
     this.mediaRecorder.start(250)

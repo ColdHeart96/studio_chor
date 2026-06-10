@@ -20,10 +20,12 @@ export function useRecorder() {
   const recorderRef    = useRef<VocalRecorder | null>(null)
   const countdownTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const elapsedTimer   = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Mutex: prevents double-tap from launching two concurrent countdowns
+  const busyRef        = useRef(false)
 
   function clearTimers() {
-    if (countdownTimer.current) clearInterval(countdownTimer.current)
-    if (elapsedTimer.current)   clearInterval(elapsedTimer.current)
+    if (countdownTimer.current) { clearInterval(countdownTimer.current); countdownTimer.current = null }
+    if (elapsedTimer.current)   { clearInterval(elapsedTimer.current);   elapsedTimer.current   = null }
   }
 
   useEffect(() => () => {
@@ -32,10 +34,13 @@ export function useRecorder() {
     stream?.getTracks().forEach(t => t.stop())
   }, [])
 
-  async function startCountdown(audioMode: AudioMode = 'headphones') {
+  // onBeforeRecord: called just before recorder.start().
+  // Should start the backing tracks and return when ready.
+  async function startCountdown(audioMode: AudioMode = 'headphones', onBeforeRecord?: () => Promise<void>) {
+    if (busyRef.current) return  // prevent double-tap
+    busyRef.current = true
     setError(null)
     try {
-      // Must request mic inside user gesture (iOS requirement)
       const s = await requestMicrophoneAccess(audioMode)
       setStream(s)
 
@@ -48,21 +53,30 @@ export function useRecorder() {
       setCountdown(COUNTDOWN_SECONDS)
 
       let count = COUNTDOWN_SECONDS
-      countdownTimer.current = setInterval(() => {
+      // Store in local var so the callback always clears the right interval,
+      // even if startCountdown were somehow called again (race safety).
+      const timer = setInterval(() => {
         count--
         setCountdown(count)
         if (count <= 0) {
-          clearInterval(countdownTimer.current!)
-          beginRecording(recorder)
+          clearInterval(timer)
+          countdownTimer.current = null
+          busyRef.current = false
+          beginRecording(recorder, onBeforeRecord)
         }
       }, 1000)
-    } catch (err: unknown) {
+      countdownTimer.current = timer
+    } catch {
       setError('Accès au micro refusé. Autorisez le microphone dans les réglages.')
       setState('idle')
+      busyRef.current = false
     }
   }
 
-  function beginRecording(recorder: VocalRecorder) {
+  async function beginRecording(recorder: VocalRecorder, onBeforeRecord?: () => Promise<void>) {
+    // Start backing tracks FIRST so the recorder captures them in sync
+    if (onBeforeRecord) await onBeforeRecord()
+    if (recorder.isRecording) return  // guard: async gap may have triggered a second call
     recorder.start()
     setState('recording')
     setElapsed(0)
@@ -85,6 +99,7 @@ export function useRecorder() {
 
   function restartRecording() {
     clearTimers()
+    busyRef.current = false
     recorderRef.current?.destroy()
     recorderRef.current = null
     setBlob(null)

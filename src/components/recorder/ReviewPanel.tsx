@@ -28,8 +28,9 @@ export function ReviewPanel({
   blob, elapsed, engine, loadedTracks, recordedWithVoices,
   trackVolumes, onSave, onRetry, onDiscard,
 }: ReviewPanelProps) {
-  const [ready, setReady]       = useState(false)
-  const [saving, setSaving]     = useState(false)
+  const [ready, setReady]         = useState(false)
+  const [decodeError, setDecodeError] = useState(false)
+  const [saving, setSaving]       = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
 
   // ── Voice controls ────────────────────────────────────────────────────────
@@ -55,7 +56,9 @@ export function ReviewPanel({
 
   // ── Decode blob once ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!blob || blob.size < 100) { setDecodeError(true); return }
     const ctx = engine.getContext()
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {})
     blob.arrayBuffer()
       .then(ab => ctx.decodeAudioData(ab))
       .then(buf => {
@@ -63,7 +66,10 @@ export function ReviewPanel({
         setReady(true)
         setTimeout(() => drawWaveform(), 50)
       })
-      .catch(err => console.error('ReviewPanel decode error', err))
+      .catch(err => {
+        console.error('ReviewPanel decode error', err)
+        setDecodeError(true)
+      })
 
     return () => { _stopAll() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -201,6 +207,17 @@ export function ReviewPanel({
 
   // ── Which tracks to show: only those used during recording ────────────────
   const reviewTracks = VOICE_PARTS.filter(v => recordedWithVoices.has(v) && engine.hasBuffer(v))
+
+  if (decodeError) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-[13px] text-studio-red mb-4">
+          ⚠ Enregistrement vide ou trop court — réessayez
+        </div>
+        <Button variant="ghost" size="lg" onClick={onRetry}>↺ Recommencer</Button>
+      </div>
+    )
+  }
 
   return (
     <div>

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useOrgContext } from '@/contexts/OrgContext'
 import { useRecorder } from '@/hooks/useRecorder'
@@ -75,29 +75,26 @@ export function RecordTab() {
 
   const [isPreviewing, setIsPreviewing] = useState(false)
 
-  // Stop preview when leaving idle state
+  // Stop engine whenever we leave the recording state
   useEffect(() => {
-    if (state !== 'idle') {
+    if (state !== 'recording') {
       setIsPreviewing(false)
       try { engine.pause() } catch { /* ignore */ }
     }
   }, [state, engine])
 
-  // Start / stop backing tracks when recording state changes
-  useEffect(() => {
-    if (state === 'recording') {
-      const sel = selectedVoicesRef.current
-      const vols = trackVolumesRef.current
-      for (const v of VOICE_PARTS) {
-        engine.setVolume(v, sel.has(v) ? (vols[v] ?? 0.8) : 0)
-      }
-      engine.seek(0)
-      engine.setLoop(false)   // no loop during recording — tracks play once and stop
-      engine.play().catch(() => {})
-    } else if (state === 'reviewing') {
-      try { engine.pause() } catch { /* ignore */ }
+  // Start backing tracks BEFORE the recorder so voice and tracks are in sync.
+  // Called by useRecorder just before recorder.start().
+  const onBeforeRecord = useCallback(async () => {
+    const sel  = selectedVoicesRef.current
+    const vols = trackVolumesRef.current
+    for (const v of VOICE_PARTS) {
+      engine.setVolume(v, sel.has(v) ? (vols[v] ?? 0.8) : 0)
     }
-  }, [state, engine])
+    engine.seek(0)
+    engine.setLoop(false)
+    await engine.play()
+  }, [engine])
 
   function togglePreview() {
     if (isPreviewing) {
@@ -416,7 +413,7 @@ export function RecordTab() {
         }
       </div>
 
-      <Button variant="red" size="lg" onClick={() => startCountdown(audioMode)}>
+      <Button variant="red" size="lg" onClick={() => startCountdown(audioMode, onBeforeRecord)}>
         ⏺ &nbsp;Démarrer l&apos;enregistrement
       </Button>
     </div>
