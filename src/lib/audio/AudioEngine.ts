@@ -219,7 +219,12 @@ export class AudioEngine {
   // ── Internal ──────────────────────────────────────────────────────────────
   private _stopSources(): void {
     for (const source of Object.values(this.sources)) {
-      try { source?.stop() } catch { /* ignore */ }
+      if (!source) continue
+      // Clear onended BEFORE stop() — otherwise the callback fires after seek/pause
+      // and the closure's activeCount reaches 0, triggering a spurious onEnded
+      // that resets the UI to 0 while new sources keep playing.
+      source.onended = null
+      try { source.stop() } catch { /* ignore */ }
     }
     this.sources = {}
   }
