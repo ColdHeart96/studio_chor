@@ -91,6 +91,11 @@ export function RecordTab() {
     }
     engine.seek(0)
     engine.setLoop(false)
+    // Force normal speed during recording — otherwise a speed change made
+    // in the LECTEUR tab persists here and the saved take ends up with the
+    // sped-up/slowed-down track baked in, while review playback uses the
+    // original buffers at 1x → you hear two rhythms at once.
+    engine.setPlaybackRate(1.0)
     await engine.play()
   }, [engine])
 
@@ -108,6 +113,7 @@ export function RecordTab() {
       }
       engine.seek(0)
       engine.setLoop(true, 0, 1)
+      engine.setPlaybackRate(1.0)  // preview at the same speed as recording
       engine.play().catch(() => {})
       setIsPreviewing(true)
     }
