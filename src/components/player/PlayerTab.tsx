@@ -102,12 +102,40 @@ export function PlayerTab() {
   const hasLoaded = Object.keys(loadedTracks).length > 0
 
   useEffect(() => {
-    if (!tracks.length) return
+    if (!tracks.length) {
+      // Org has no tracks anymore — clear local state and engine buffers
+      setLoadedTracks({})
+      setPeaksMap({})
+      for (const v of VOICE_PARTS) {
+        if (engine.hasBuffer(v)) engine.removeTrack(v)
+      }
+      return
+    }
+    // Drop voice_parts that are no longer in the org's tracks (stale buffers
+    // would keep playing the OLD audio after admin add/remove operations).
+    const currentParts = new Set(tracks.map(t => t.voice_part))
+    for (const v of VOICE_PARTS) {
+      if (!currentParts.has(v) && engine.hasBuffer(v)) {
+        engine.removeTrack(v)
+      }
+    }
+    setLoadedTracks(prev => {
+      const next: Partial<Record<VoicePart, Track>> = {}
+      for (const v of VOICE_PARTS) if (currentParts.has(v) && prev[v]) next[v] = prev[v]
+      return next
+    })
+    setPeaksMap(prev => {
+      const next: Partial<Record<VoicePart, number[]>> = {}
+      for (const v of VOICE_PARTS) if (currentParts.has(v) && prev[v]) next[v] = prev[v]
+      return next
+    })
+
     async function loadAll() {
       for (const track of tracks) {
         if (!track.url) continue
         setLoadingTrack(track.voice_part)
         try {
+          // Always reload — admin may have replaced the file with a new URL
           await engine.loadTrack(track.voice_part, track.url)
           const buf = engine.getBuffer(track.voice_part)
           if (buf) {

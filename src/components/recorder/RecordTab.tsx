@@ -51,25 +51,33 @@ export function RecordTab() {
 
   // Load tracks into engine when list changes; init selection to all
   useEffect(() => {
-    if (!tracks.length) return
+    if (!tracks.length) {
+      setLoadedTracks({})
+      setSelectedVoices(new Set())
+      return
+    }
     setSelectedVoices(new Set(tracks.map(t => t.voice_part)))
 
-    async function loadMissing() {
+    // Drop stale buffers (admin removed a voice_part from the org)
+    const currentParts = new Set(tracks.map(t => t.voice_part))
+    for (const v of VOICE_PARTS) {
+      if (!currentParts.has(v) && engine.hasBuffer(v)) engine.removeTrack(v)
+    }
+
+    async function loadAll() {
       setLoadingTrack(true)
       const next: Partial<Record<VoicePart, Track>> = {}
       for (const track of tracks) {
         if (!track.url) continue
-        if (!engine.hasBuffer(track.voice_part)) {
-          try { await engine.loadTrack(track.voice_part, track.url) } catch { continue }
-        }
+        // Always reload — admin may have replaced the audio file
+        try { await engine.loadTrack(track.voice_part, track.url) } catch { continue }
         next[track.voice_part] = track
       }
       setLoadedTracks(next)
       setLoadingTrack(false)
     }
-    loadMissing()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length])
+    loadAll()
+  }, [tracks, engine])
 
   const [isPreviewing, setIsPreviewing] = useState(false)
 
