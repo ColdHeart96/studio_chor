@@ -46,9 +46,10 @@ export async function renderMix(
     voiceVol: number
     activeVoices: Set<VoicePart>
     trackVolumes: Partial<Record<VoicePart, number>>
+    engineDelay?: number
   },
 ): Promise<{ blob: Blob; mimeType: string }> {
-  const { hearVoice, voiceVol, activeVoices, trackVolumes } = options
+  const { hearVoice, voiceVol, activeVoices, trackVolumes, engineDelay = 0 } = options
   const activeTracks = VOICE_PARTS.filter(v => activeVoices.has(v) && engine.getBuffer(v))
 
   // Nothing to mix — return voice blob as-is
@@ -76,7 +77,10 @@ export async function renderMix(
       vSrc.start(0)
     }
 
-    // Backing tracks checked in review, limited to voice recording duration
+    // Backing tracks: delayed by engineDelay to align with the singing start.
+    // The voice blob contains engineDelay seconds of silence before the
+    // backing tracks actually started during recording — offsetting here
+    // ensures perfect sync in the rendered file.
     for (const v of activeTracks) {
       const buf = engine.getBuffer(v)!
       const g   = offCtx.createGain()
@@ -84,7 +88,7 @@ export async function renderMix(
       g.connect(offCtx.destination)
       const src = offCtx.createBufferSource()
       src.buffer = buf
-      src.start(0, 0, duration)
+      src.start(engineDelay, 0, duration - engineDelay)
       src.connect(g)
     }
 

@@ -49,6 +49,10 @@ export function RecordTab() {
   const trackVolumesRef = useRef(trackVolumes)
   trackVolumesRef.current = trackVolumes
 
+  // Seconds between recorder.start() and the first engine source actually playing.
+  // Measured on every recording and used to re-align tracks in the saved mix.
+  const engineDelayRef = useRef(0)
+
   // Load tracks into engine when list changes; init selection to all
   useEffect(() => {
     if (!tracks.length) {
@@ -92,6 +96,7 @@ export function RecordTab() {
   // Start backing tracks BEFORE the recorder so voice and tracks are in sync.
   // Called by useRecorder just before recorder.start().
   const onBeforeRecord = useCallback(async () => {
+    const t0 = performance.now()
     const sel  = selectedVoicesRef.current
     const vols = trackVolumesRef.current
     for (const v of VOICE_PARTS) {
@@ -105,6 +110,11 @@ export function RecordTab() {
     // original buffers at 1x → you hear two rhythms at once.
     engine.setPlaybackRate(1.0)
     await engine.play()
+    // Measure how long it took from this callback being invoked to sources
+    // actually starting. recorder.start() was called a few ms before this
+    // callback, so the voice blob has this much silence at the start before
+    // the backing tracks began. Cap at 150 ms to guard against outliers.
+    engineDelayRef.current = Math.min((performance.now() - t0) / 1000, 0.15)
   }, [engine])
 
   function togglePreview() {
@@ -152,7 +162,10 @@ export function RecordTab() {
     if (!blob || !user) return
     setSaveError('')
     try {
-      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(blob, engine, reviewState)
+      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(blob, engine, {
+        ...reviewState,
+        engineDelay: engineDelayRef.current,
+      })
       const path = await uploadTake(user.id, mixedBlob, mixMime)
       await saveTake({
         name:            `Prise ${new Date().toLocaleDateString('fr-FR')}`,
@@ -241,6 +254,7 @@ export function RecordTab() {
           loadedTracks={loadedTracks}
           recordedWithVoices={selectedVoices}
           trackVolumes={trackVolumes}
+          engineDelay={engineDelayRef.current}
           onSave={handleSave}
           onRetry={restartRecording}
           onDiscard={discardRecording}

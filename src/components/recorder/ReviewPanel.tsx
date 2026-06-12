@@ -13,6 +13,7 @@ interface ReviewPanelProps {
   loadedTracks: Partial<Record<VoicePart, Track>>
   recordedWithVoices: Set<VoicePart>
   trackVolumes: Partial<Record<VoicePart, number>>   // volumes set before recording
+  engineDelay?: number
   onSave: (state: {
     hearVoice: boolean
     voiceVol: number
@@ -25,7 +26,7 @@ interface ReviewPanelProps {
 
 export function ReviewPanel({
   blob, elapsed, engine, loadedTracks, recordedWithVoices,
-  trackVolumes, onSave, onRetry, onDiscard,
+  trackVolumes, engineDelay = 0, onSave, onRetry, onDiscard,
 }: ReviewPanelProps) {
   const [ready, setReady]         = useState(false)
   const [decodeError, setDecodeError] = useState(false)
@@ -158,8 +159,10 @@ export function ReviewPanel({
       g.connect(aac.destination)
       const s = aac.createBufferSource()
       s.buffer = buf
-      // Limit backing track to voice recording duration (prevents tracks playing past voice end)
-      s.start(0, 0, voiceBuf.duration)
+      // Offset by engineDelay so tracks align with the singing in the blob
+      // (voice blob has engineDelay seconds of silence at the start before
+      // backing tracks began during recording)
+      s.start(engineDelay, 0, voiceBuf.duration - engineDelay)
       s.connect(g)
       newSources.push(s)
     }
