@@ -42,12 +42,15 @@ export function RecordTab() {
     return init
   })
 
-  // Always-current ref: avoids stale-closure bug in the recording useEffect
+  // Always-current refs: avoid stale-closure bugs in useEffect callbacks
   const selectedVoicesRef = useRef<Set<VoicePart>>(selectedVoices)
   selectedVoicesRef.current = selectedVoices
 
   const trackVolumesRef = useRef(trackVolumes)
   trackVolumesRef.current = trackVolumes
+
+  const loadedTracksRef = useRef(loadedTracks)
+  loadedTracksRef.current = loadedTracks
 
   // Seconds between recorder.start() and the first engine source actually playing.
   // Measured on every recording and used to re-align tracks in the saved mix.
@@ -73,8 +76,11 @@ export function RecordTab() {
       const next: Partial<Record<VoicePart, Track>> = {}
       for (const track of tracks) {
         if (!track.url) continue
-        // Always reload — admin may have replaced the audio file
-        try { await engine.loadTrack(track.voice_part, track.url) } catch { continue }
+        const prev = loadedTracksRef.current[track.voice_part]
+        const sameFile = prev?.storage_path === track.storage_path && engine.hasBuffer(track.voice_part)
+        if (!sameFile) {
+          try { await engine.loadTrack(track.voice_part, track.url) } catch { continue }
+        }
         next[track.voice_part] = track
       }
       setLoadedTracks(next)

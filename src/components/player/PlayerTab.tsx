@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useOrgContext } from '@/contexts/OrgContext'
 import { useAudioEngine } from '@/hooks/useAudioEngine'
 import { useTracks } from '@/hooks/useTracks'
@@ -37,6 +37,9 @@ export function PlayerTab() {
   const [peaksMap, setPeaksMap]         = useState<Partial<Record<VoicePart, number[]>>>({})
   const [loadingTrack, setLoadingTrack] = useState<VoicePart | null>(null)
   const [status, setStatus]             = useState('Aucune piste chargée')
+
+  const loadedTracksRef = useRef(loadedTracks)
+  loadedTracksRef.current = loadedTracks
 
   // ── Mix state (volume / mute / solo) ──────────────────────────────────────
   const [mixState, setMixState] = useState<MixStateMap>(DEFAULT_MIX)
@@ -133,15 +136,17 @@ export function PlayerTab() {
     async function loadAll() {
       for (const track of tracks) {
         if (!track.url) continue
+        const prev = loadedTracksRef.current[track.voice_part]
+        const sameFile = prev?.storage_path === track.storage_path && engine.hasBuffer(track.voice_part)
+        if (sameFile) continue
         setLoadingTrack(track.voice_part)
         try {
-          // Always reload — admin may have replaced the file with a new URL
           await engine.loadTrack(track.voice_part, track.url)
           const buf = engine.getBuffer(track.voice_part)
           if (buf) {
             const peaks = extractPeaks(buf)
-            setPeaksMap(prev => ({ ...prev, [track.voice_part]: peaks }))
-            setLoadedTracks(prev => ({ ...prev, [track.voice_part]: track }))
+            setPeaksMap(prev2 => ({ ...prev2, [track.voice_part]: peaks }))
+            setLoadedTracks(prev2 => ({ ...prev2, [track.voice_part]: track }))
           }
         } catch (e) {
           console.error('Erreur chargement piste', track.voice_part, e)
