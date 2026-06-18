@@ -29,6 +29,7 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
   const [pendingMarkerTime, setPendingMarkerTime] = useState<number | null>(null)
   const [commentText, setCommentText]       = useState('')
   const [saving, setSaving]                 = useState(false)
+  const [seekToTime, setSeekToTime]         = useState<number | null>(null)
 
   const renameInputRef  = useRef<HTMLInputElement>(null)
   const commentInputRef = useRef<HTMLInputElement>(null)
@@ -188,13 +189,14 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
             duration={take.duration}
             comments={comments}
             onMarkerPlace={markerMode ? handleMarkerPlace : undefined}
+            seekToTime={seekToTime}
           />
 
           {/* Marker mode hint */}
           {markerMode && !isAddingComment && (
             <div className="flex items-center gap-2 text-[11px]" style={{ color: '#FF9944' }}>
               <span className="animate-pulse">◈</span>
-              Cliquez sur la forme d&apos;onde pour placer un marqueur
+              Cliquez sur la forme d&apos;onde pour placer un feedback
               <button onClick={cancelComment} className="ml-auto text-[#555] hover:text-studio-muted">Annuler</button>
             </div>
           )}
@@ -212,7 +214,7 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
                     Global
                   </span>
                 )}
-                <span className="text-[11px] text-studio-muted">Votre commentaire</span>
+                <span className="text-[11px] text-studio-muted">Votre feedback</span>
               </div>
               <input
                 ref={commentInputRef}
@@ -248,9 +250,9 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
                   ? { border: '1px solid #FF994466', background: '#FF994412', color: '#FF9944' }
                   : { border: '1px solid #1e1c18', background: 'transparent', color: '#555' }
                 }
-                title="Placer un marqueur temporel"
+                title="Placer un feedback temporel"
               >
-                <span>◈</span> Marqueur
+                <span>◈</span> Feedback
               </button>
               <button
                 onClick={startGlobalComment}
@@ -269,6 +271,7 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
               onDelete={id => ownCommentIds.has(id) ? deleteComment(id) : undefined}
               isAdmin={false}
               showDeleteForIds={ownCommentIds}
+              onSeek={time => { setSeekToTime(null); setTimeout(() => setSeekToTime(time), 0) }}
             />
           )}
         </div>

@@ -15,14 +15,19 @@ const nextConfig = {
   // PWA webpack config only runs on production builds (disable: dev).
   turbopack: {},
   async headers() {
+    // Set NEXT_PUBLIC_FRAME_ANCESTORS in .env.local to restrict iframe embedding,
+    // e.g. NEXT_PUBLIC_FRAME_ANCESTORS='self' https://your-wordpress-domain.com
+    const frameAncestors = process.env.NEXT_PUBLIC_FRAME_ANCESTORS || "'self'"
     return [
       {
         source: '/(.*)',
         headers: [
-          // Allow embedding in WordPress iframe
-          { key: 'X-Frame-Options', value: 'ALLOWALL' },
-          // Or restrict to specific WP domain (uncomment and replace):
-          // { key: 'Content-Security-Policy', value: "frame-ancestors 'self' https://your-wordpress-domain.com" },
+          // CSP frame-ancestors supersedes X-Frame-Options in modern browsers.
+          { key: 'Content-Security-Policy', value: `frame-ancestors ${frameAncestors}` },
+          // Keep X-Frame-Options as fallback for older browsers.
+          { key: 'X-Frame-Options', value: frameAncestors === "'self'" ? 'SAMEORIGIN' : 'ALLOWALL' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },
     ]

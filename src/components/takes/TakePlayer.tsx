@@ -11,9 +11,10 @@ interface TakePlayerProps {
   duration: string | null
   comments?: TakeComment[]
   onMarkerPlace?: (time: number) => void
+  seekToTime?: number | null   // quand change → seek + play
 }
 
-export function TakePlayer({ storagePath, duration: durationStr, comments = [], onMarkerPlace }: TakePlayerProps) {
+export function TakePlayer({ storagePath, duration: durationStr, comments = [], onMarkerPlace, seekToTime }: TakePlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrent] = useState(0)
   const [duration, setDuration]   = useState(0)
@@ -83,6 +84,15 @@ export function TakePlayer({ storagePath, duration: durationStr, comments = [], 
       setCurrent(time)
     }
   }
+
+  // Seek + play quand seekToTime change (déclenché depuis CommentThread)
+  useEffect(() => {
+    if (seekToTime == null || !audioRef.current) return
+    const audio = audioRef.current
+    audio.currentTime = seekToTime
+    setCurrent(seekToTime)
+    audio.play().then(() => setIsPlaying(true)).catch(() => {})
+  }, [seekToTime])
 
   if (loading) {
     return (

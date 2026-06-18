@@ -187,15 +187,30 @@ export class AudioEngine {
   }
 
   setLoop(enabled: boolean, a = 0.2, b = 0.7): void {
+    const wasPlaying = this._playing
+    const prevOffset = this.currentTime
+
     this._loopEnabled = enabled
     this._loopA = a
     this._loopB = b
-    for (const source of Object.values(this.sources)) {
-      if (!source) continue
-      source.loop = enabled
-      if (enabled) {
-        source.loopStart = a * this.duration
-        source.loopEnd   = b * this.duration
+
+    if (wasPlaying) {
+      // Restart sources immediately with the new loop region.
+      // When loop is enabled, always jump to loopStart so the user hears
+      // the new zone from the beginning right away.
+      const loopStart = a * this.duration
+      const offset = enabled ? loopStart : prevOffset
+      this._stopSources()
+      this._playing = false
+      this.play(offset)
+    } else {
+      for (const source of Object.values(this.sources)) {
+        if (!source) continue
+        source.loop = enabled
+        if (enabled) {
+          source.loopStart = a * this.duration
+          source.loopEnd   = b * this.duration
+        }
       }
     }
   }

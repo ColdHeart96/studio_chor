@@ -6,10 +6,11 @@ interface CommentThreadProps {
   comments: TakeComment[]
   onDelete?: (id: number) => void
   isAdmin?: boolean
-  showDeleteForIds?: Set<number>  // ids the current user can delete (own comments)
+  showDeleteForIds?: Set<number>
+  onSeek?: (time: number) => void  // clic sur badge temporel → seek + play
 }
 
-export function CommentThread({ comments, onDelete, isAdmin, showDeleteForIds }: CommentThreadProps) {
+export function CommentThread({ comments, onDelete, isAdmin, showDeleteForIds, onSeek }: CommentThreadProps) {
   if (comments.length === 0) {
     return (
       <div className="text-[11px] text-[#333] py-2">Aucun commentaire</div>
@@ -27,10 +28,14 @@ export function CommentThread({ comments, onDelete, isAdmin, showDeleteForIds }:
           >
             {/* Time badge */}
             {comment.time_position !== null ? (
-              <span className="text-[9px] px-1.5 py-0.5 rounded tabular-nums flex-shrink-0 mt-0.5"
-                style={{ background: '#FF994418', border: '1px solid #FF994433', color: '#FF9944' }}>
-                ◈ {formatTime(comment.time_position)}
-              </span>
+              <button
+                onClick={() => onSeek?.(comment.time_position!)}
+                className="text-[9px] px-1.5 py-0.5 rounded tabular-nums flex-shrink-0 mt-0.5 transition-opacity hover:opacity-70"
+                style={{ background: '#FF994418', border: '1px solid #FF994433', color: '#FF9944' }}
+                title="Aller à ce moment et lancer la lecture"
+              >
+                ▶ {formatTime(comment.time_position)}
+              </button>
             ) : (
               <span className="text-[9px] text-studio-muted bg-studio-border px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
                 Global
