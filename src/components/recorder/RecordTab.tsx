@@ -81,17 +81,20 @@ export function RecordTab() {
 
   const [isPreviewing, setIsPreviewing] = useState(false)
 
-  // Stop engine whenever we leave the recording state
+  // Stop engine and detach the mic from the recording graph whenever we leave
+  // the recording state (stop, discard, restart, or after save).
   useEffect(() => {
     if (state !== 'recording') {
       setIsPreviewing(false)
       try { engine.pause() } catch { /* ignore */ }
+      engine.disconnectMic()
     }
   }, [state, engine])
 
-  // Start backing tracks BEFORE the recorder so voice and tracks are in sync.
-  // Called by useRecorder just before recorder.start().
-  const onBeforeRecord = useCallback(async () => {
+  // Wires the mic into the engine's recording bus and returns the mixed stream to
+  // record from. Called by useRecorder before the countdown starts (mic + tracks
+  // need to be on the graph before we schedule anything).
+  const setupGraph = useCallback((micStream: MediaStream) => {
     const sel  = selectedVoicesRef.current
     const vols = trackVolumesRef.current
     for (const v of VOICE_PARTS) {
@@ -104,7 +107,16 @@ export function RecordTab() {
     // sped-up/slowed-down track baked in, while review playback uses the
     // original buffers at 1x → you hear two rhythms at once.
     engine.setPlaybackRate(1.0)
-    await engine.play()
+    engine.connectMicToRecordingBus(micStream)
+    return engine.getRecordingDestination().stream
+  }, [engine])
+
+  // Schedules the backing tracks to start on the shared AudioContext clock, a
+  // hair in the future — mic and tracks land in the same recording graph on the
+  // same timeline, so there's no independent-clocks race to "catch up" from.
+  const scheduleTracks = useCallback(() => {
+    const startTime = engine.getContext().currentTime + 0.1
+    engine.play(0, startTime).catch(() => {})
   }, [engine])
 
   function togglePreview() {
@@ -377,11 +389,10 @@ export function RecordTab() {
       )}
 
       <Button variant="red" size="lg" onClick={() => {
-        // Pre-warm AudioContext inside the user gesture so engine.play() is instant
-        // when the countdown ends — avoids 50-300ms resume delay that would delay
-        // backing tracks relative to the voice.
+        // Pre-warm AudioContext inside the user gesture (iOS requirement) so it's
+        // already running by the time setupGraph/scheduleTracks touch it.
         try { engine.getContext().resume().catch(() => {}) } catch { /* ignore */ }
-        startCountdown(onBeforeRecord)
+        startCountdown({ setupGraph, scheduleTracks })
       }}>
         ⏺ &nbsp;Démarrer l&apos;enregistrement
       </Button>

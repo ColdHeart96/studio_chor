@@ -12,6 +12,14 @@ export class AudioEngine {
   private masterGain: GainNode | null = null
   private sources: Partial<Record<VoicePart, AudioBufferSourceNode>> = {}
 
+  // Recording graph: masterGain also feeds this bus (in addition to ctx.destination),
+  // and the mic connects ONLY here (never to ctx.destination, to avoid feedback/larsen).
+  // Keeps mic + backing tracks on the same AudioContext clock so MediaRecorder captures
+  // an already-synchronized mix instead of two independently-started streams.
+  private recordingBus: GainNode | null = null
+  private recordingDestination: MediaStreamAudioDestinationNode | null = null
+  private micSource: MediaStreamAudioSourceNode | null = null
+
   // Track volumes separately from mute state so we can restore on unmute
   private _volumes: Partial<Record<VoicePart, number>> = {}
 
@@ -41,6 +49,37 @@ export class AudioEngine {
   async resumeContext() {
     const ctx = this.getContext()
     if (ctx.state === 'suspended') await ctx.resume()
+  }
+
+  // ── Recording graph ──────────────────────────────────────────────────────
+  /** Lazily creates the recording bus and wires masterGain into it. */
+  getRecordingDestination(): MediaStreamAudioDestinationNode {
+    const ctx = this.getContext()
+    if (!this.recordingDestination) {
+      this.recordingBus = ctx.createGain()
+      this.recordingDestination = ctx.createMediaStreamDestination()
+      this.recordingBus.connect(this.recordingDestination)
+      this.masterGain!.connect(this.recordingBus)
+    }
+    return this.recordingDestination
+  }
+
+  /** Connects the mic stream to the recording bus only — never to ctx.destination. */
+  connectMicToRecordingBus(stream: MediaStream): MediaStreamAudioSourceNode {
+    const ctx = this.getContext()
+    this.getRecordingDestination()
+    this.disconnectMic()
+    const source = ctx.createMediaStreamSource(stream)
+    source.connect(this.recordingBus!)
+    this.micSource = source
+    return source
+  }
+
+  disconnectMic(): void {
+    if (this.micSource) {
+      try { this.micSource.disconnect() } catch { /* ignore */ }
+      this.micSource = null
+    }
   }
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -94,12 +133,18 @@ export class AudioEngine {
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
-  async play(offset?: number): Promise<void> {
+  /**
+   * @param startTime AudioContext time (ctx.currentTime + N) to schedule playback at.
+   *   Used during recording to start the backing tracks on the exact same clock the
+   *   recording graph captures from, instead of "now" (which races the mic connection).
+   */
+  async play(offset?: number, startTime?: number): Promise<void> {
     await this.resumeContext()
     if (this._playing) this._stopSources()
 
     const ctx = this.ctx!
     const startOffset = offset ?? this._startOffset
+    const when = startTime !== undefined ? Math.max(startTime, ctx.currentTime) : 0
     const dur = this.duration
     if (dur === 0) return
 
@@ -122,7 +167,7 @@ export class AudioEngine {
         source.loopEnd   = this._loopB * dur
       }
       // FIX: never pass a duration arg when looping (causes RangeError when offset > loopEnd)
-      source.start(0, startOffset)
+      source.start(when, startOffset)
 
       source.onended = () => {
         activeCount--
@@ -138,7 +183,7 @@ export class AudioEngine {
       this.sources[voice] = source
     }
 
-    this._startTime   = ctx.currentTime
+    this._startTime   = when > 0 ? when : ctx.currentTime
     this._startOffset = startOffset
     this._playing     = true
     this._startAnimation()
