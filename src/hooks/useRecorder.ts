@@ -33,9 +33,15 @@ export function useRecorder() {
     stream?.getTracks().forEach(t => t.stop())
   }, [])
 
-  // onBeforeRecord: called just before recorder.start().
-  // Should start the backing tracks and return when ready.
-  async function startCountdown(onBeforeRecord?: () => Promise<void>) {
+  // setupGraph: given the raw mic stream, connects it to the engine's recording bus
+  // and returns the mixed (mic + tracks) stream to actually record from.
+  // scheduleTracks: schedules the backing tracks to start on the shared AudioContext
+  // clock — called right after recorder.start() so both live on the same timeline
+  // instead of racing two independent async starts.
+  async function startCountdown(callbacks?: {
+    setupGraph: (micStream: MediaStream) => MediaStream
+    scheduleTracks: () => void
+  }) {
     if (busyRef.current) return  // prevent double-tap
     busyRef.current = true
     setError(null)
@@ -43,8 +49,9 @@ export function useRecorder() {
       const s = await requestMicrophoneAccess()
       setStream(s)
 
+      const recordStream = callbacks ? callbacks.setupGraph(s) : s
       const recorder = new VocalRecorder()
-      await recorder.init(s)
+      await recorder.init(recordStream)
       recorderRef.current = recorder
       setMimeType(recorder.mimeType)
 
@@ -61,7 +68,7 @@ export function useRecorder() {
           clearInterval(timer)
           countdownTimer.current = null
           busyRef.current = false
-          beginRecording(recorder, onBeforeRecord)
+          beginRecording(recorder, callbacks?.scheduleTracks)
         }
       }, 1000)
       countdownTimer.current = timer
@@ -72,18 +79,16 @@ export function useRecorder() {
     }
   }
 
-  function beginRecording(recorder: VocalRecorder, onBeforeRecord?: () => Promise<void>) {
-    // Start recorder FIRST so we capture the user's first notes.
-    // If we waited for engine.play() to finish, the engine's resume + scheduling
-    // delay (50-300ms) would make us miss the start of the singing — in playback
-    // the voice would appear "ahead" of the track because the recording starts
-    // mid-phrase.
+  function beginRecording(recorder: VocalRecorder, scheduleTracks?: () => void) {
+    // Mic and backing tracks are both already wired into the same AudioContext graph
+    // (see setupGraph) — recorder.start() and scheduleTracks() no longer race each
+    // other, so the order between them doesn't affect sync. Starting the recorder
+    // first just avoids clipping the singer's very first notes.
     try { recorder.start() } catch { return }
     setState('recording')
     setElapsed(0)
 
-    // Start backing tracks in parallel — they catch up within ~50ms
-    if (onBeforeRecord) onBeforeRecord().catch(() => {})
+    scheduleTracks?.()
 
     let secs = 0
     elapsedTimer.current = setInterval(() => {
