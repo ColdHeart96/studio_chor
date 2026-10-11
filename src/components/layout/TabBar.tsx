@@ -1,6 +1,7 @@
 'use client'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useOrgContext } from '@/contexts/OrgContext'
 import type { UserRole } from '@/types/app.types'
 
 interface Tab {
@@ -25,6 +26,8 @@ const ADMIN_TABS: Tab[] = [
 export function TabBar({ role, takesCount }: { role: UserRole; takesCount?: number }) {
   const pathname = usePathname()
   const router   = useRouter()
+  const { isAdmin: isOrgAdmin } = useOrgContext()
+  const canAdmin = role === 'admin' || isOrgAdmin
 
   const isAdmin = pathname.startsWith('/admin')
   const tabs = isAdmin ? ADMIN_TABS : APP_TABS
@@ -53,7 +56,7 @@ export function TabBar({ role, takesCount }: { role: UserRole; takesCount?: numb
       })}
 
       {/* Switch admin ↔ app for admin users */}
-      {role === 'admin' && (
+      {canAdmin && (
         <button
           onClick={() => router.push(isAdmin ? '/app/player' : '/admin/organizations')}
           className="ml-auto px-3 py-2.5 text-[10px] text-studio-muted hover:text-studio-gold transition-colors whitespace-nowrap flex-shrink-0 border-b-2 border-b-transparent"

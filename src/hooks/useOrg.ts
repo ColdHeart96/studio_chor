@@ -1,7 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
-import type { Organization } from '@/types/app.types'
+import type { Organization, OrgRole } from '@/types/app.types'
 import { getSupabaseClient } from '@/lib/supabase/client'
+
+interface MembershipRow {
+  role: OrgRole
+  organizations: Organization | null
+}
 
 export function useOrg(userId: string | undefined) {
   const [orgs, setOrgs]       = useState<Organization[]>([])
@@ -11,29 +16,20 @@ export function useOrg(userId: string | undefined) {
     if (!userId) { setOrgs([]); setLoading(false); return }
     const sb = getSupabaseClient()
 
-    // Fetch orgs where user is admin OR is a member
-    const [{ data: adminOrgs }, { data: memberOrgIds }] = await Promise.all([
-      sb.from('organizations').select('*').eq('admin_id', userId),
-      sb.from('org_members').select('org_id').eq('user_id', userId),
-    ])
+    // Une seule requête : toutes mes appartenances (le propriétaire est membre admin
+    // de son org depuis la migration 003), avec mon rôle dans chacune.
+    const { data } = await sb
+      .from('org_members')
+      .select('role, organizations(*)')
+      .eq('user_id', userId)
 
-    const memberIds = (memberOrgIds ?? []).map((m: { org_id: string }) => m.org_id)
+    const rows = (data ?? []) as unknown as MembershipRow[]
+    const list = rows
+      .filter((r): r is MembershipRow & { organizations: Organization } => !!r.organizations)
+      .map(r => ({ ...r.organizations, my_role: r.role }))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
 
-    let memberOrgs: Organization[] = []
-    if (memberIds.length > 0) {
-      const { data } = await sb
-        .from('organizations')
-        .select('*')
-        .in('id', memberIds)
-      memberOrgs = (data as Organization[]) ?? []
-    }
-
-    // Merge, deduplicate
-    const map = new Map<string, Organization>()
-    for (const o of [...(adminOrgs as Organization[] ?? []), ...memberOrgs]) {
-      map.set(o.id, o)
-    }
-    setOrgs([...map.values()])
+    setOrgs(list)
     setLoading(false)
   }
 

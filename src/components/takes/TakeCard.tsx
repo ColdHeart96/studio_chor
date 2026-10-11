@@ -67,7 +67,10 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
       const objUrl = URL.createObjectURL(dlBlob)
       const a      = document.createElement('a')
       a.href       = objUrl
-      const ext    = dlBlob.type.includes('wav') ? 'wav' : dlBlob.type.includes('webm') ? 'webm' : 'mp4'
+      const ext    = dlBlob.type.includes('mpeg') ? 'mp3'
+                   : dlBlob.type.includes('wav')  ? 'wav'
+                   : dlBlob.type.includes('webm') ? 'webm'
+                   : 'mp4'
       a.download   = `${take.name}.${ext}`
       a.click()
       URL.revokeObjectURL(objUrl)

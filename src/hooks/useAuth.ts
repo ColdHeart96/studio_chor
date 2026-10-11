@@ -40,10 +40,36 @@ export function useAuth() {
     if (error) throw error
   }
 
+  /** Envoie l'e-mail de réinitialisation. Le lien ramène sur /auth?reset=1. */
+  async function sendPasswordReset(email: string) {
+    const sb = getSupabaseClient()
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth?reset=1`,
+    })
+    if (error) throw error
+  }
+
+  /** Échange le code reçu par e-mail contre une session (flux PKCE : même navigateur que la demande). */
+  async function exchangeRecoveryCode(code: string) {
+    const sb = getSupabaseClient()
+    const { error } = await sb.auth.exchangeCodeForSession(code)
+    if (error) throw error
+  }
+
+  async function updatePassword(password: string) {
+    const sb = getSupabaseClient()
+    const { error } = await sb.auth.updateUser({ password })
+    if (error) throw error
+  }
+
   async function signOut() {
     const sb = getSupabaseClient()
     await sb.auth.signOut()
   }
 
-  return { user, session, loading, signIn, signUp, signOut }
+  return {
+    user, session, loading,
+    signIn, signUp, signOut,
+    sendPasswordReset, exchangeRecoveryCode, updatePassword,
+  }
 }

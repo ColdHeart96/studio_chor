@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 export function Header({ profile, onLogout }: HeaderProps) {
-  const { activeOrg, orgs, setActiveOrg } = useOrgContext()
+  const { activeOrg, orgs, setActiveOrg, isAdmin } = useOrgContext()
 
   return (
     <div className="px-6 pt-5 pb-0 border-b border-studio-border bg-gradient-to-b from-[#12100a] to-transparent">
@@ -30,7 +30,7 @@ export function Header({ profile, onLogout }: HeaderProps) {
         </div>
 
         {/* Right: org switcher + user */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {/* Org switcher (if multiple orgs) */}
           {orgs.length > 1 && activeOrg && (
             <select
@@ -52,13 +52,13 @@ export function Header({ profile, onLogout }: HeaderProps) {
               <span className="text-[11px] text-studio-muted max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap hidden sm:block">
                 {profile.email}
               </span>
-              <RolePill role={profile.role} />
+              <RolePill role={isAdmin || profile.role === 'admin' ? 'admin' : 'choriste'} />
               <button
                 onClick={onLogout}
                 className="bg-transparent border border-studio-border2 rounded px-2 py-1 text-studio-muted text-[10px] cursor-pointer hover:text-studio-text transition-colors font-serif"
                 title="Se déconnecter"
               >
-                ↪ Déco
+                ↪ Déconnexion
               </button>
             </div>
           )}

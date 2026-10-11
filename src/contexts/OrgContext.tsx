@@ -8,6 +8,8 @@ interface OrgContextValue {
   orgs: Organization[]
   setActiveOrg: (org: Organization) => void
   isLoading: boolean
+  /** Admin d'au moins une organisation */
+  isAdmin: boolean
   reload: () => void
 }
 
@@ -36,7 +38,16 @@ export function OrgProvider({
   }, [])
 
   return (
-    <OrgContext.Provider value={{ activeOrg, orgs, setActiveOrg, isLoading: loading, reload }}>
+    <OrgContext.Provider
+      value={{
+        activeOrg,
+        orgs,
+        setActiveOrg,
+        isLoading: loading,
+        isAdmin: orgs.some(o => o.my_role === 'admin'),
+        reload,
+      }}
+    >
       {children}
     </OrgContext.Provider>
   )

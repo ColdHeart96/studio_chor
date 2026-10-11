@@ -1,15 +1,16 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useOrgContext } from '@/contexts/OrgContext'
-import { removeOrgMember } from '@/lib/orgs'
+import { removeOrgMember, setMemberRole } from '@/lib/orgs'
 import { getSupabaseClient } from '@/lib/supabase/client'
 import { SectionLabel } from '@/components/ui/Card'
 import { RolePill } from '@/components/ui/RolePill'
 import { Spinner } from '@/components/ui/Spinner'
-import type { Profile } from '@/types/app.types'
+import type { Profile, OrgRole } from '@/types/app.types'
 
 interface Member {
   user_id: string
+  role: OrgRole
   joined_at: string
   profiles: Profile
 }
@@ -25,7 +26,7 @@ export function UserTable() {
     const sb = getSupabaseClient()
     const { data } = await sb
       .from('org_members')
-      .select('user_id, joined_at, profiles(*)')
+      .select('user_id, role, joined_at, profiles(*)')
       .eq('org_id', activeOrg.id)
       .order('joined_at')
     setMembers((data as Member[]) ?? [])
@@ -41,15 +42,18 @@ export function UserTable() {
   }
 
   async function handleRoleToggle(member: Member) {
-    const newRole = member.profiles.role === 'admin' ? 'choriste' : 'admin'
-    if (!confirm(`Changer le rôle de ${member.profiles.email} en ${newRole} ?`)) return
-    const sb = getSupabaseClient()
-    await sb.from('profiles').update({ role: newRole }).eq('id', member.user_id)
-    setMembers(prev => prev.map(m =>
-      m.user_id === member.user_id
-        ? { ...m, profiles: { ...m.profiles, role: newRole } }
-        : m
-    ))
+    if (!activeOrg) return
+    const newRole: OrgRole = member.role === 'admin' ? 'member' : 'admin'
+    const label = newRole === 'admin' ? 'administrateur' : 'choriste'
+    if (!confirm(`Changer le rôle de ${member.profiles.email} en ${label} ?`)) return
+    try {
+      await setMemberRole(member.user_id, activeOrg.id, newRole)
+      setMembers(prev => prev.map(m =>
+        m.user_id === member.user_id ? { ...m, role: newRole } : m
+      ))
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Erreur')
+    }
   }
 
   if (!activeOrg) return <div className="text-[#444] text-sm text-center py-8">Sélectionnez une organisation</div>
@@ -96,20 +100,26 @@ export function UserTable() {
                 Rejoint le {new Date(member.joined_at).toLocaleDateString('fr-FR')}
               </div>
             </div>
-            <RolePill role={member.profiles.role} />
-            <button
-              onClick={() => handleRoleToggle(member)}
-              className="text-[10px] px-2 py-0.5 border border-studio-border2 rounded text-studio-muted hover:text-studio-text font-serif transition-colors"
-            >
-              Changer rôle
-            </button>
-            <button
-              onClick={() => handleRemove(member.user_id)}
-              className="text-[11px] text-studio-muted hover:text-studio-red transition-colors"
-              title="Exclure"
-            >
-              ✕
-            </button>
+            <RolePill role={member.role === 'admin' ? 'admin' : 'choriste'} />
+            {activeOrg.admin_id === member.user_id ? (
+              <span className="text-[10px] text-studio-muted">Propriétaire</span>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleRoleToggle(member)}
+                  className="text-[10px] px-2 py-0.5 border border-studio-border2 rounded text-studio-muted hover:text-studio-text font-serif transition-colors"
+                >
+                  Changer rôle
+                </button>
+                <button
+                  onClick={() => handleRemove(member.user_id)}
+                  className="text-[11px] text-studio-muted hover:text-studio-red transition-colors"
+                  title="Exclure"
+                >
+                  ✕
+                </button>
+              </>
+            )}
           </div>
         ))}
       </div>

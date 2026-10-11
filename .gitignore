@@ -23,3 +23,8 @@ next-env.d.ts
 # OS
 .DS_Store
 *.pem
+
+.vercel
+
+# Notes internes (ne pas publier)
+SECURITY_TODO.md
