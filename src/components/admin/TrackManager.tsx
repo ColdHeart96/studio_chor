@@ -5,12 +5,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useTracks } from '@/hooks/useTracks'
 import { uploadTrack } from '@/lib/storage'
 import { getSupabaseClient } from '@/lib/supabase/client'
-import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
+import { VOICE_PARTS, VOICE_LABELS } from '@/lib/constants'
+import { useTheme } from '@/lib/theme'
 import { Card, SectionLabel } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
 import type { Track, VoicePart } from '@/types/app.types'
 
 export function TrackManager() {
+  const { voiceColors: VOICE_COLORS } = useTheme()
   const { user } = useAuth()
   const { activeOrg, orgs, setActiveOrg } = useOrgContext()
   const { tracks, loading, reload } = useTracks(activeOrg?.id)
@@ -49,7 +51,7 @@ export function TrackManager() {
 
   if (!activeOrg) {
     return (
-      <div className="text-center py-8 text-[#444] text-sm">
+      <div className="text-center py-8 text-studio-faint text-sm">
         Sélectionnez ou créez une organisation
       </div>
     )
@@ -73,7 +75,7 @@ export function TrackManager() {
                 onClick={() => setActiveOrg(o)}
                 className={`px-3 py-1.5 rounded-lg text-[11px] border font-serif transition-all ${
                   activeOrg.id === o.id
-                    ? 'bg-[#E8C54722] border-studio-gold text-studio-gold'
+                    ? 'bg-[rgb(var(--gold)/0.13)] border-studio-gold text-studio-gold'
                     : 'bg-transparent border-studio-border2 text-studio-muted hover:text-studio-text'
                 }`}
               >

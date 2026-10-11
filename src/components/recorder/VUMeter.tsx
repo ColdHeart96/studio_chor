@@ -17,7 +17,7 @@ export function VUMeter({ stream, barCount = 20, color = '#E8C547' }: VUMeterPro
       {bars.map((level, i) => {
         const h = Math.max(3, level * 28)
         // Color gradient: green → yellow → red based on level
-        const c = level < 0.5 ? '#4ADE80' : level < 0.8 ? '#E8C547' : '#FF4444'
+        const c = level < 0.5 ? 'rgb(var(--green))' : level < 0.8 ? 'rgb(var(--gold))' : 'rgb(var(--red))'
         return (
           <div
             key={i}

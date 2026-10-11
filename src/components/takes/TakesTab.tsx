@@ -29,7 +29,7 @@ export function TakesTab() {
         </div>
         <button
           onClick={() => router.push('/app/record')}
-          className="px-3.5 py-1.5 bg-[#CC222218] border border-studio-red rounded text-[#FF6644] text-[11px] font-serif cursor-pointer hover:bg-[#CC222228] transition-colors"
+          className="px-3.5 py-1.5 bg-[rgb(var(--red-dark)/0.09)] border border-studio-red rounded text-studio-coral text-[11px] font-serif cursor-pointer hover:bg-[rgb(var(--red-dark)/0.16)] transition-colors"
         >
           + Nouvelle prise
         </button>
@@ -38,8 +38,8 @@ export function TakesTab() {
       {takes.length === 0 ? (
         <div className="text-center py-12 text-studio-muted">
           <div className="text-3xl mb-3">♪</div>
-          <div className="text-sm text-[#444]">Aucune prise pour le moment</div>
-          <div className="text-[11px] text-[#333] mt-1">
+          <div className="text-sm text-studio-faint">Aucune prise pour le moment</div>
+          <div className="text-[11px] text-studio-muted2 mt-1">
             Enregistrez votre voix dans l&apos;onglet Enregistrer
           </div>
         </div>

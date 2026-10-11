@@ -34,7 +34,7 @@ export function TakeReviewList() {
   useEffect(() => { load() }, [activeOrg?.id])
 
   if (!activeOrg) {
-    return <div className="text-center py-8 text-[#444] text-sm">Sélectionnez une organisation</div>
+    return <div className="text-center py-8 text-studio-faint text-sm">Sélectionnez une organisation</div>
   }
 
   return (
@@ -66,7 +66,7 @@ export function TakeReviewList() {
       )}
 
       {!loading && takes.length === 0 && (
-        <div className="text-center py-8 text-[#444] text-sm">
+        <div className="text-center py-8 text-studio-faint text-sm">
           Aucune prise dans cette organisation
         </div>
       )}
@@ -77,7 +77,7 @@ export function TakeReviewList() {
             key={take.id}
             className={`flex items-center gap-3 px-3.5 py-3 bg-studio-surface border rounded-xl cursor-pointer transition-all ${
               selectedTake?.id === take.id
-                ? 'border-[rgba(232,197,71,0.3)] bg-[rgba(232,197,71,0.03)]'
+                ? 'border-[rgb(var(--gold)/0.3)] bg-[rgb(var(--gold)/0.03)]'
                 : 'border-studio-border hover:border-studio-border2'
             }`}
             onClick={() => setSelected(selectedTake?.id === take.id ? null : take)}

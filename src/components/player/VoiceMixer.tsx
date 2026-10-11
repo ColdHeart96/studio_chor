@@ -1,5 +1,6 @@
 'use client'
-import { VOICE_LABELS, VOICE_COLORS, VOICE_PARTS } from '@/lib/constants'
+import { VOICE_LABELS, VOICE_PARTS } from '@/lib/constants'
+import { useTheme } from '@/lib/theme'
 import type { VoicePart, Track } from '@/types/app.types'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +21,7 @@ interface VoiceMixerProps {
 }
 
 export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onSoloToggle }: VoiceMixerProps) {
+  const { voiceColors: VOICE_COLORS } = useTheme()
   const loadedParts = VOICE_PARTS.filter(v => tracks[v])
   if (loadedParts.length === 0) return null
 
@@ -67,7 +69,7 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
               style={{
                 appearance: 'none',
                 height: '3px',
-                background: `linear-gradient(90deg, ${color} ${state.volume * 100 / 1.5}%, #2a2418 ${state.volume * 100 / 1.5}%)`,
+                background: `linear-gradient(90deg, ${color} ${state.volume * 100 / 1.5}%, rgb(var(--border2)) ${state.volume * 100 / 1.5}%)`,
                 borderRadius: '2px',
               }}
             />
@@ -85,8 +87,8 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] border font-serif transition-all',
                 state.solo
-                  ? 'bg-[#E8C54722] border-studio-gold text-studio-gold'
-                  : 'bg-transparent border-studio-border text-[#444] hover:text-[#888]'
+                  ? 'bg-[rgb(var(--gold)/0.13)] border-studio-gold text-studio-gold'
+                  : 'bg-transparent border-studio-border text-studio-faint hover:text-studio-strong'
               )}
             >
               S
@@ -100,8 +102,8 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] border font-serif transition-all',
                 state.muted
-                  ? 'bg-[#FF444422] border-studio-red text-studio-red'
-                  : 'bg-transparent border-studio-border text-[#444] hover:text-[#888]'
+                  ? 'bg-[rgb(var(--red)/0.13)] border-studio-red text-studio-red'
+                  : 'bg-transparent border-studio-border text-studio-faint hover:text-studio-strong'
               )}
             >
               M

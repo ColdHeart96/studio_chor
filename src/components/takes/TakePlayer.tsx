@@ -109,7 +109,7 @@ export function TakePlayer({ storagePath, duration: durationStr, comments = [], 
       <div className="flex items-center gap-3">
         <button
           onClick={togglePlay}
-          className="w-9 h-9 rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-bg flex items-center justify-center text-sm hover:scale-105 transition-transform"
+          className="w-9 h-9 rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-ink flex items-center justify-center text-sm hover:scale-105 transition-transform"
         >
           {isPlaying ? '⏸' : '▶'}
         </button>
@@ -119,7 +119,7 @@ export function TakePlayer({ storagePath, duration: durationStr, comments = [], 
             className="h-full rounded"
             style={{
               width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%',
-              background: 'linear-gradient(90deg, #B8962A, #E8C547)',
+              background: 'linear-gradient(90deg, rgb(var(--gold-dim)), rgb(var(--gold)))',
             }}
           />
         </div>

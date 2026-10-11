@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { drawWaveform } from '@/lib/audio/waveformUtils'
+import { useTheme, themeColor } from '@/lib/theme'
 
 export interface WaveformMarker {
   id: string | number
@@ -29,11 +30,13 @@ export function WaveformRenderer({
   onSeek,
   onMarkerPlace,
   loopRegion,
-  color = '#E8C547',
+  color: colorProp,
   className = '',
   height = 44,
 }: WaveformRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { theme } = useTheme()
+  const color = colorProp ?? themeColor('gold')
   // Force a redraw when the container resizes (e.g. on first layout)
   const [, setResizeTick] = useState(0)
 
@@ -71,7 +74,7 @@ export function WaveformRenderer({
     ctx.scale(dpr, dpr)
 
     drawWaveform(canvas, peaks, {
-      color:         '#2a2418',
+      color:         themeColor('border2'),
       progressColor: color,
       progress,
       barWidth: 2,
@@ -82,9 +85,9 @@ export function WaveformRenderer({
     if (loopRegion) {
       const ax = loopRegion.a * w
       const bx = loopRegion.b * w
-      ctx.fillStyle = '#FFFFFF26'
+      ctx.fillStyle = themeColor('overlay', 0.15)
       ctx.fillRect(ax, 0, bx - ax, h)
-      ctx.strokeStyle = '#FFFFFFCC'
+      ctx.strokeStyle = themeColor('overlay', 0.8)
       ctx.lineWidth = 2
       ctx.beginPath()
       ctx.moveTo(ax + 1, 0)
@@ -92,7 +95,7 @@ export function WaveformRenderer({
       ctx.moveTo(bx - 1, 0)
       ctx.lineTo(bx - 1, h)
       ctx.stroke()
-      ctx.fillStyle = '#FFFFFF'
+      ctx.fillStyle = themeColor('text')
       ctx.font = 'bold 10px sans-serif'
       ctx.textBaseline = 'top'
       ctx.fillText('A', ax + 4, 2)
@@ -104,14 +107,14 @@ export function WaveformRenderer({
       for (const m of markers) {
         if (m.time_position === null || m.time_position === undefined) continue
         const x = (m.time_position / duration) * w
-        ctx.strokeStyle = '#FF9944'
+        ctx.strokeStyle = themeColor('orange')
         ctx.lineWidth = 1.5
         ctx.beginPath()
         ctx.moveTo(x, 0)
         ctx.lineTo(x, h)
         ctx.stroke()
         // Diamond head
-        ctx.fillStyle = '#FF9944'
+        ctx.fillStyle = themeColor('orange')
         ctx.beginPath()
         ctx.moveTo(x, 0)
         ctx.lineTo(x + 5, 6)
@@ -125,7 +128,7 @@ export function WaveformRenderer({
     // Playhead
     if (progress > 0 && progress < 1) {
       const px = progress * w
-      ctx.strokeStyle = '#ffffff44'
+      ctx.strokeStyle = themeColor('text', 0.3)
       ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(px, 0)
@@ -133,7 +136,7 @@ export function WaveformRenderer({
       ctx.stroke()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peaks, progress, loopRegion, markers, duration, color])
+  }, [peaks, progress, loopRegion, markers, duration, color, theme])
 
   const fractionAt = useCallback((clientX: number): number => {
     const rect = canvasRef.current?.getBoundingClientRect()

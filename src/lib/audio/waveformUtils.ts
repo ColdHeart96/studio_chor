@@ -1,3 +1,4 @@
+import { themeColor } from '@/lib/theme'
 /**
  * Extract normalized peak values from an AudioBuffer for waveform rendering.
  * Returns an array of N values in range [0, 1].
@@ -39,10 +40,10 @@ export function drawWaveform(
   } = {}
 ): void {
   const {
-    color         = '#2a2418',
+    color         = themeColor('border2'),
     bgColor       = 'transparent',
     progress      = 0,
-    progressColor = '#E8C547',
+    progressColor = themeColor('gold'),
     barWidth      = 2,
     gap           = 1,
   } = options

@@ -17,6 +17,14 @@ export const VOICE_COLORS: Record<VoicePart, string> = {
   basse:   '#6688FF',
 }
 
+// Variantes assombries pour le thème clair (textes lisibles sur fond blanc)
+export const VOICE_COLORS_LIGHT: Record<VoicePart, string> = {
+  soprano: '#D6409F',
+  alto:    '#D9730D',
+  tenor:   '#1F9D55',
+  basse:   '#3B5BDB',
+}
+
 export const MAX_ORGS_PER_ADMIN = 3
 
 export const MAX_RECORDING_SECONDS = 10 * 60 // 10 minutes

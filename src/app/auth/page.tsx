@@ -1,4 +1,5 @@
 'use client'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
@@ -179,11 +180,12 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-studio-gradient px-4">
+    <div className="min-h-screen flex items-center justify-center bg-studio-gradient px-4 relative">
+      <ThemeToggle className="absolute top-4 right-4" />
       <div className="w-full max-w-sm p-8 bg-studio-surface border border-studio-border2 rounded-2xl animate-fadeIn">
         {/* Logo */}
         <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim flex items-center justify-center text-2xl mx-auto mb-3 shadow-[0_0_20px_#E8C54744]">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim flex items-center justify-center text-2xl mx-auto mb-3 shadow-[0_0_20px_rgb(var(--gold)/0.27)]">
             ♪
           </div>
           <div className="text-lg text-studio-gold tracking-wide">Chœur Studio</div>
@@ -262,7 +264,7 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full py-3.5 rounded-xl font-serif text-sm tracking-wide bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-bg font-semibold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2 mt-1"
+            className="w-full py-3.5 rounded-xl font-serif text-sm tracking-wide bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-ink font-semibold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2 mt-1"
           >
             {busy && <span className="inline-block w-3 h-3 border-2 border-studio-bg/30 border-t-studio-bg rounded-full animate-spin-sm" />}
             {submitLabel[mode]}

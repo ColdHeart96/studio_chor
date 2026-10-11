@@ -114,9 +114,9 @@ export function TransportControls({
               style={{
                 left: `${loopA * 100}%`,
                 width: `${(loopB - loopA) * 100}%`,
-                background: '#FFFFFF26',
-                borderLeft: '2px solid #FFFFFFCC',
-                borderRight: '2px solid #FFFFFFCC',
+                background: 'rgb(var(--overlay) / 0.15)',
+                borderLeft: '2px solid rgb(var(--overlay) / 0.8)',
+                borderRight: '2px solid rgb(var(--overlay) / 0.8)',
               }}
             />
           )}
@@ -125,13 +125,13 @@ export function TransportControls({
             className="h-full rounded"
             style={{
               width: '0%',
-              background: 'linear-gradient(90deg, #B8962A, #E8C547)',
+              background: 'linear-gradient(90deg, rgb(var(--gold-dim)), rgb(var(--gold)))',
             }}
           />
           {/* Thumb — positioned absolutely, also updated via rAF */}
           <div
             ref={thumbRef}
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-studio-gold shadow-[0_0_8px_#E8C54788] pointer-events-none"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-studio-gold shadow-[0_0_8px_rgb(var(--gold)/0.53)] pointer-events-none"
             style={{ left: '0%' }}
           />
         </div>
@@ -159,8 +159,8 @@ export function TransportControls({
           aria-pressed={loopEnabled}
           className={`flex items-center gap-2 px-4 py-2 rounded-full border text-[12px] transition-all cursor-pointer ${
             loopEnabled
-              ? 'bg-[#FFFFFF18] border-[#FFFFFFAA] text-white'
-              : 'bg-studio-surface border-studio-border text-[#777] hover:border-studio-border2 hover:text-[#999]'
+              ? 'bg-[rgb(var(--overlay)/0.09)] border-[rgb(var(--overlay)/0.67)] text-studio-text'
+              : 'bg-studio-surface border-studio-border text-studio-soft hover:border-studio-border2 hover:text-studio-strong'
           }`}
           title="Répéter en boucle un passage de la piste"
         >

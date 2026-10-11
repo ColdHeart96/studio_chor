@@ -14,8 +14,8 @@ export function IconButton({ active, size = 'md', className, children, ...props 
       className={cn(
         'rounded-full flex items-center justify-center transition-all cursor-pointer',
         active
-          ? 'bg-[#E8C54722] border border-studio-gold text-studio-gold'
-          : 'bg-studio-surface border border-studio-border text-[#666] hover:border-studio-border2 hover:text-[#888]',
+          ? 'bg-[rgb(var(--gold)/0.13)] border border-studio-gold text-studio-gold'
+          : 'bg-studio-surface border border-studio-border text-studio-soft hover:border-studio-border2 hover:text-studio-strong',
         sizes[size],
         className
       )}
@@ -40,7 +40,7 @@ export function PlayButton({
     <button
       onClick={onClick}
       className={cn(
-        'rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-bg flex items-center justify-center shadow-[0_0_30px_#E8C54755] transition-all hover:scale-105',
+        'rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-ink flex items-center justify-center shadow-[0_0_30px_rgb(var(--gold)/0.33)] transition-all hover:scale-105',
         sizes[size]
       )}
     >

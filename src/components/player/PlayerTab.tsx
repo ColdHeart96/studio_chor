@@ -4,7 +4,8 @@ import { useOrgContext } from '@/contexts/OrgContext'
 import { useAudioEngine } from '@/hooks/useAudioEngine'
 import { useTracks } from '@/hooks/useTracks'
 import { extractPeaks } from '@/lib/audio/waveformUtils'
-import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
+import { VOICE_PARTS, VOICE_LABELS } from '@/lib/constants'
+import { useTheme } from '@/lib/theme'
 import { SectionLabel } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
 import { RefreshHint } from '@/components/ui/RefreshHint'
@@ -24,6 +25,7 @@ const DEFAULT_MIX: MixStateMap = {
 }
 
 export function PlayerTab() {
+  const { voiceColors: VOICE_COLORS } = useTheme()
   const { activeOrg } = useOrgContext()
   const { tracks, loading } = useTracks(activeOrg?.id)
   const {
@@ -203,7 +205,7 @@ export function PlayerTab() {
       {!hasLoaded && !loading && !loadingTrack && (
         <div className="text-center py-12 text-studio-muted">
           <div className="text-4xl mb-3">🎼</div>
-          <div className="text-sm text-[#555]">
+          <div className="text-sm text-studio-muted">
             {activeOrg ? 'Aucune piste disponible dans cette organisation' : 'Sélectionnez une organisation'}
           </div>
         </div>
@@ -265,7 +267,7 @@ export function PlayerTab() {
             <SectionLabel className="m-0">Marqueurs</SectionLabel>
             <button
               onClick={addMarker}
-              className="px-3 py-1 bg-[#E8C54718] border border-[#E8C54744] rounded text-studio-gold text-[11px] font-serif cursor-pointer"
+              className="px-3 py-1 bg-[rgb(var(--gold)/0.09)] border border-[rgb(var(--gold)/0.27)] rounded text-studio-gold text-[11px] font-serif cursor-pointer"
             >
               + Marquer ici
             </button>
@@ -283,7 +285,7 @@ export function PlayerTab() {
                       onChange={e => setEditingLabel(e.target.value)}
                       onBlur={() => commitLabel(m.id)}
                       onKeyDown={e => { if (e.key === 'Enter') commitLabel(m.id); if (e.key === 'Escape') setEditingId(null) }}
-                      className="w-20 bg-[#1a1810] border border-studio-gold rounded px-1.5 py-0.5 text-studio-gold text-[12px] font-serif outline-none"
+                      className="w-20 bg-studio-raised border border-studio-gold rounded px-1.5 py-0.5 text-studio-gold text-[12px] font-serif outline-none"
                       maxLength={20}
                     />
                   ) : (
@@ -300,14 +302,14 @@ export function PlayerTab() {
                   </span>
                   <button
                     onClick={() => seek(m.time)}
-                    className="text-[10px] text-[#444] hover:text-[#888] border border-studio-border px-1.5 py-0.5 rounded font-serif"
+                    className="text-[10px] text-studio-faint hover:text-studio-strong border border-studio-border px-1.5 py-0.5 rounded font-serif"
                     title="Aller à ce marqueur"
                   >
                     ▶
                   </button>
                   <button
                     onClick={() => setMarkers(prev => prev.filter(x => x.id !== m.id))}
-                    className="text-[10px] text-[#444] hover:text-studio-red"
+                    className="text-[10px] text-studio-faint hover:text-studio-red"
                     title="Supprimer"
                   >
                     ✕

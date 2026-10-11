@@ -65,9 +65,9 @@ function AdminShell({
         <Header profile={profile} onLogout={onLogout} />
         <TabBar role="admin" />
         <div className="flex-1 px-6 py-6">{children}</div>
-        <footer className="px-6 py-3 border-t border-[#1a1814] flex justify-between">
-          <span className="text-[10px] text-[#2a2418]">Vue administrateur</span>
-          <span className="text-[10px] text-[#2a2418]">Chœur Studio v2.0</span>
+        <footer className="px-6 py-3 border-t border-studio-raised flex justify-between">
+          <span className="text-[10px] text-studio-border2">Vue administrateur</span>
+          <span className="text-[10px] text-studio-border2">Chœur Studio v2.0</span>
         </footer>
       </div>
     </div>

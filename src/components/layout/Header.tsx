@@ -1,4 +1,5 @@
 'use client'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { RolePill } from '@/components/ui/RolePill'
 import { useOrgContext } from '@/contexts/OrgContext'
 import type { Profile } from '@/types/app.types'
@@ -12,11 +13,11 @@ export function Header({ profile, onLogout }: HeaderProps) {
   const { activeOrg, orgs, setActiveOrg, isAdmin } = useOrgContext()
 
   return (
-    <div className="px-6 pt-5 pb-0 border-b border-studio-border bg-gradient-to-b from-[#12100a] to-transparent">
+    <div className="px-6 pt-5 pb-0 border-b border-studio-border bg-gradient-to-b from-studio-surface to-transparent">
       <div className="flex justify-between items-center mb-4">
         {/* Logo */}
         <div className="flex items-center gap-2.5">
-          <div className="w-[34px] h-[34px] rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim flex items-center justify-center text-[15px] shadow-[0_0_16px_#E8C54744]">
+          <div className="w-[34px] h-[34px] rounded-full bg-gradient-to-br from-studio-gold to-studio-gold-dim flex items-center justify-center text-[15px] shadow-[0_0_16px_rgb(var(--gold)/0.27)]">
             ♪
           </div>
           <div>
@@ -46,6 +47,8 @@ export function Header({ profile, onLogout }: HeaderProps) {
               ))}
             </select>
           )}
+
+          <ThemeToggle />
 
           {profile && (
             <div className="flex items-center gap-2">

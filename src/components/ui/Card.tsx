@@ -11,7 +11,7 @@ export function Card({ children, className, accent }: CardProps) {
     <div
       className={cn(
         'bg-studio-surface border border-studio-border rounded-xl p-4',
-        accent && 'bg-[rgba(232,197,71,0.03)] border-[rgba(232,197,71,0.12)]',
+        accent && 'bg-[rgb(var(--gold)/0.03)] border-[rgb(var(--gold)/0.12)]',
         className
       )}
     >

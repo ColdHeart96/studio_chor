@@ -56,7 +56,7 @@ export function UserTable() {
     }
   }
 
-  if (!activeOrg) return <div className="text-[#444] text-sm text-center py-8">Sélectionnez une organisation</div>
+  if (!activeOrg) return <div className="text-studio-faint text-sm text-center py-8">Sélectionnez une organisation</div>
 
   return (
     <div>
@@ -77,9 +77,9 @@ export function UserTable() {
       )}
 
       {!loading && members.length === 0 && (
-        <div className="text-center py-8 text-[#444] text-sm">
+        <div className="text-center py-8 text-studio-faint text-sm">
           Aucun choriste dans cette organisation.<br />
-          <span className="text-[11px] text-[#333]">
+          <span className="text-[11px] text-studio-muted2">
             Partagez le code : <span className="text-studio-gold font-mono">{activeOrg.invite_code}</span>
           </span>
         </div>
