@@ -1,11 +1,10 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useOrgContext } from '@/contexts/OrgContext'
 import { useAudioEngine } from '@/hooks/useAudioEngine'
 import { useTracks } from '@/hooks/useTracks'
 import { extractPeaks } from '@/lib/audio/waveformUtils'
 import { VOICE_PARTS, VOICE_LABELS } from '@/lib/constants'
-import { useTheme } from '@/lib/theme'
 import { SectionLabel } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
 import { RefreshHint } from '@/components/ui/RefreshHint'
@@ -25,7 +24,6 @@ const DEFAULT_MIX: MixStateMap = {
 }
 
 export function PlayerTab() {
-  const { voiceColors: VOICE_COLORS } = useTheme()
   const { activeOrg } = useOrgContext()
   const { tracks, loading } = useTracks(activeOrg?.id)
   const {
@@ -96,6 +94,25 @@ export function PlayerTab() {
       return next
     })
   }
+
+  // Forme d'onde unique : somme (maximum, pondéré par le volume) des voix audibles
+  const combinedPeaks = useMemo(() => {
+    const anySolo = VOICE_PARTS.some(v => mixState[v].solo)
+    const audible = VOICE_PARTS.filter(v => peaksMap[v] && !mixState[v].muted && (!anySolo || mixState[v].solo))
+    const sources = audible.length > 0 ? audible : VOICE_PARTS.filter(v => peaksMap[v])
+    if (sources.length === 0) return []
+    const n = Math.max(...sources.map(v => peaksMap[v]!.length))
+    const out = new Array<number>(n).fill(0)
+    for (const v of sources) {
+      const p = peaksMap[v]!
+      const gain = audible.length > 0 ? Math.min(1, mixState[v].volume) : 0.3
+      for (let i = 0; i < n; i++) {
+        const val = (p[Math.min(p.length - 1, Math.floor(i * p.length / n))] ?? 0) * gain
+        if (val > out[i]) out[i] = val
+      }
+    }
+    return out
+  }, [peaksMap, mixState])
 
   // ── Markers ───────────────────────────────────────────────────────────────
   const [markers, setMarkers]           = useState<Marker[]>([])
@@ -213,30 +230,18 @@ export function PlayerTab() {
 
       {hasLoaded && (
         <>
-          <SectionLabel>Aperçu des pistes</SectionLabel>
+          <SectionLabel>Lecture</SectionLabel>
 
-          {/* Per-voice waveforms with markers */}
-          {VOICE_PARTS.filter(v => peaksMap[v]).map(voice => (
-            <div key={voice} className="mb-2">
-              <div className="flex items-center gap-2 mb-1">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: VOICE_COLORS[voice], boxShadow: `0 0 4px ${VOICE_COLORS[voice]}66` }}
-                />
-                <span className="text-[11px] text-studio-muted">{VOICE_LABELS[voice]}</span>
-              </div>
-              <WaveformRenderer
-                peaks={peaksMap[voice]!}
-                duration={duration}
-                currentTime={currentTime}
-                markers={waveformMarkers}
-                color={VOICE_COLORS[voice]}
-                onSeek={seek}
-                loopRegion={loopEnabled ? { a: loopA, b: loopB } : undefined}
-                height={32}
-              />
-            </div>
-          ))}
+          {/* Une seule piste de lecture : l'ensemble des voix audibles, avec marqueurs et zone de boucle */}
+          <WaveformRenderer
+            peaks={combinedPeaks}
+            duration={duration}
+            currentTime={currentTime}
+            markers={waveformMarkers}
+            onSeek={seek}
+            loopRegion={loopEnabled ? { a: loopA, b: loopB } : undefined}
+            height={64}
+          />
 
           <TransportControls
             isPlaying={isPlaying}
@@ -323,6 +328,11 @@ export function PlayerTab() {
           <SectionLabel>Mixage des voix</SectionLabel>
           <VoiceMixer
             tracks={loadedTracks}
+            peaks={peaksMap}
+            duration={duration}
+            currentTime={currentTime}
+            onSeek={seek}
+            loopRegion={loopEnabled ? { a: loopA, b: loopB } : undefined}
             mixState={mixState}
             onVolumeChange={handleVolumeChange}
             onMuteToggle={handleMuteToggle}
