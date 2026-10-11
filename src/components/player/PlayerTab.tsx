@@ -95,7 +95,7 @@ export function PlayerTab() {
     })
   }
 
-  // Forme d'onde unique : somme (maximum, pondéré par le volume) des voix audibles
+  // Forme d'onde unique : moyenne (pondérée par le volume) des voix audibles
   const combinedPeaks = useMemo(() => {
     const anySolo = VOICE_PARTS.some(v => mixState[v].solo)
     const audible = VOICE_PARTS.filter(v => peaksMap[v] && !mixState[v].muted && (!anySolo || mixState[v].solo))
@@ -107,9 +107,13 @@ export function PlayerTab() {
       const p = peaksMap[v]!
       const gain = audible.length > 0 ? Math.min(1, mixState[v].volume) : 0.3
       for (let i = 0; i < n; i++) {
-        const val = (p[Math.min(p.length - 1, Math.floor(i * p.length / n))] ?? 0) * gain
-        if (val > out[i]) out[i] = val
+        out[i] += (p[Math.min(p.length - 1, Math.floor(i * p.length / n))] ?? 0) * gain / sources.length
       }
+    }
+    // Remise à l'échelle : la moyenne de plusieurs voix reste lisible (sauf si tout est coupé)
+    if (audible.length > 0) {
+      const top = Math.max(...out)
+      if (top > 0) for (let i = 0; i < n; i++) out[i] /= top
     }
     return out
   }, [peaksMap, mixState])
