@@ -25,3 +25,6 @@ next-env.d.ts
 *.pem
 
 .vercel
+
+# Notes internes (ne pas publier)
+SECURITY_TODO.md
