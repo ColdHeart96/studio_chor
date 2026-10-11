@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import type { Take } from '@/types/app.types'
+import type { Json } from '@/types/database.types'
 import { getSupabaseClient } from '@/lib/supabase/client'
 import { deleteTakeFromStorage } from '@/lib/storage'
 
@@ -26,7 +27,9 @@ export function useTakes(userId: string | undefined, orgId: string | null | unde
     name: string
     duration: string
     storagePath: string
-    backingSnapshot: Record<string, unknown>
+    backingSnapshot: Json
+    /** Métadonnées de synchro (décalage appliqué, sortie audio, latences) */
+    syncInfo?: Json
     orgId?: string
   }): Promise<Take> {
     const sb = getSupabaseClient()
@@ -40,6 +43,7 @@ export function useTakes(userId: string | undefined, orgId: string | null | unde
         date: new Date().toLocaleDateString('fr-FR'),
         storage_path: params.storagePath,
         backing_snapshot: params.backingSnapshot,
+        sync_info: params.syncInfo ?? {},
       })
       .select()
       .single()

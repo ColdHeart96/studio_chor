@@ -6,9 +6,14 @@ import { useRecorder } from '@/hooks/useRecorder'
 import { useTracks } from '@/hooks/useTracks'
 import { useTakes } from '@/hooks/useTakes'
 import { uploadTake } from '@/lib/storage'
-import { renderMix } from '@/lib/audio/mixUtils'
+import { renderMixMp3 } from '@/lib/audio/mixUtils'
 import { formatTime } from '@/lib/utils'
 import { getAudioEngine } from '@/lib/audio/AudioEngine'
+import {
+  ROUTE_LABELS, getRoute, estimateLatencyMs, storeLatencyMs, type OutputRoute,
+} from '@/lib/audio/latency'
+import { LatencyPanel } from '@/components/recorder/LatencyPanel'
+import type { ReviewSaveState } from '@/components/recorder/ReviewPanel'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
 import { Card, SectionLabel } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -23,7 +28,7 @@ export function RecordTab() {
   const { activeOrg } = useOrgContext()
   const { saveTake }  = useTakes(user?.id, activeOrg?.id)
   const {
-    state, countdown, elapsed, stream, blob, mimeType, error,
+    state, countdown, elapsed, stream, voice, error,
     startCountdown, stopRecording, restartRecording, discardRecording,
   } = useRecorder()
 
@@ -34,6 +39,12 @@ export function RecordTab() {
   const [loadedTracks, setLoadedTracks]     = useState<Partial<Record<VoicePart, Track>>>({})
   const [loadingTrack, setLoadingTrack]     = useState(false)
   const [saveError, setSaveError]           = useState('')
+  const [saveProgress, setSaveProgress]     = useState<number | null>(null)
+
+  // Type de sortie audio (filaire / Bluetooth / haut-parleur), mémorisé sur l'appareil.
+  // Lu après le montage : localStorage n'existe pas côté serveur.
+  const [route, setRouteState] = useState<OutputRoute>('wired')
+  useEffect(() => { setRouteState(getRoute()) }, [])
 
   // Volume per voice part (0–1), default 0.8 like index.html
   const [trackVolumes, setTrackVolumes] = useState<Partial<Record<VoicePart, number>>>(() => {
@@ -89,9 +100,9 @@ export function RecordTab() {
     }
   }, [state, engine])
 
-  // Start backing tracks BEFORE the recorder so voice and tracks are in sync.
-  // Called by useRecorder just before recorder.start().
-  const onBeforeRecord = useCallback(async () => {
+  // Lance les pistes EXACTEMENT à t0 (temps AudioContext). La voix est capturée sur la
+  // même horloge à partir de t0 : l'échantillon 0 de la voix = le début des pistes.
+  const onBeforeRecord = useCallback(async (t0: number) => {
     const sel  = selectedVoicesRef.current
     const vols = trackVolumesRef.current
     for (const v of VOICE_PARTS) {
@@ -99,12 +110,10 @@ export function RecordTab() {
     }
     engine.seek(0)
     engine.setLoop(false)
-    // Force normal speed during recording — otherwise a speed change made
-    // in the LECTEUR tab persists here and the saved take ends up with the
-    // sped-up/slowed-down track baked in, while review playback uses the
-    // original buffers at 1x → you hear two rhythms at once.
+    // Vitesse normale pendant l'enregistrement (un réglage fait dans l'onglet Lecteur
+    // ne doit pas se retrouver dans la prise).
     engine.setPlaybackRate(1.0)
-    await engine.play()
+    await engine.play(0, t0)
   }, [engine])
 
   function togglePreview() {
@@ -143,20 +152,26 @@ export function RecordTab() {
     }
   }
 
-  async function handleSave(reviewState: {
-    hearVoice: boolean
-    voiceVol: number
-    activeVoices: Set<VoicePart>
-    trackVolumes: Partial<Record<VoicePart, number>>
-  }) {
-    if (!blob || !user) return
+  async function handleSave(reviewState: ReviewSaveState) {
+    if (!voice || !user) return
     setSaveError('')
+    setSaveProgress(0)
     try {
-      const { blob: mixedBlob, mimeType: mixMime } = await renderMix(blob, engine, reviewState)
-      const path = await uploadTake(user.id, mixedBlob, mixMime)
+      // Le fichier final est déjà synchronisé (voix décalée de offsetMs) et lisible partout.
+      const mixed = await renderMixMp3(voice, engine, {
+        hearVoice:    reviewState.hearVoice,
+        voiceVol:     reviewState.voiceVol,
+        activeVoices: reviewState.activeVoices,
+        trackVolumes: reviewState.trackVolumes,
+        offsetMs:     reviewState.offsetMs,
+        onProgress:   setSaveProgress,
+      })
+      const path = await uploadTake(user.id, mixed.blob, mixed.mimeType)
+
+      const ctx = engine.getContext()
       await saveTake({
         name:            `Prise ${new Date().toLocaleDateString('fr-FR')}`,
-        duration:        formatTime(elapsed),
+        duration:        formatTime(Math.round(mixed.durationSec)),
         storagePath:     path,
         backingSnapshot: Object.fromEntries(
           VOICE_PARTS.map(v => [v, {
@@ -164,11 +179,27 @@ export function RecordTab() {
             muted:  !reviewState.activeVoices.has(v),
           }])
         ),
+        // Télémétrie de synchro : permet de voir quels appareils/sorties demandent quel décalage.
+        syncInfo: {
+          offset_ms:      reviewState.offsetMs,
+          route,
+          calibrated:     estimateLatencyMs(null, route).source === 'calibrated',
+          sample_rate:    voice.sampleRate,
+          base_latency:   ctx.baseLatency ?? null,
+          output_latency: typeof ctx.outputLatency === 'number' ? ctx.outputLatency : null,
+          mp3_kbps:       128,
+          user_agent:     typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        },
         orgId: activeOrg?.id,
       })
+
+      // Le réglage final devient la latence de cet appareil pour les prochaines prises.
+      if (reviewState.remember) storeLatencyMs(route, reviewState.offsetMs)
       discardRecording()
     } catch (err: unknown) {
       setSaveError(err instanceof Error ? err.message : 'Erreur lors de la sauvegarde')
+    } finally {
+      setSaveProgress(null)
     }
   }
 
@@ -230,17 +261,20 @@ export function RecordTab() {
   }
 
   // ── Review ─────────────────────────────────────────────────────────────────
-  if (state === 'reviewing' && blob) {
+  if (state === 'reviewing' && voice) {
     return (
       <div>
         {saveError && <p className="text-xs text-studio-red mb-3">{saveError}</p>}
         <ReviewPanel
-          blob={blob}
+          voice={voice}
           elapsed={elapsed}
           engine={engine}
           loadedTracks={loadedTracks}
           recordedWithVoices={selectedVoices}
           trackVolumes={trackVolumes}
+          initialOffsetMs={estimateLatencyMs(engine.getContext(), route).ms}
+          routeLabel={ROUTE_LABELS[route]}
+          saveProgress={saveProgress}
           onSave={handleSave}
           onRetry={restartRecording}
           onDiscard={discardRecording}
@@ -375,6 +409,9 @@ export function RecordTab() {
           )}
         </div>
       )}
+
+      {/* ── Sortie audio + calibration de la latence ─────────────────────────── */}
+      <LatencyPanel route={route} onRouteChange={setRouteState} />
 
       <Button variant="red" size="lg" onClick={() => {
         // Pre-warm AudioContext inside the user gesture so engine.play() is instant

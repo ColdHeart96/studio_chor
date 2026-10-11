@@ -1,40 +1,86 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/Button'
 import { formatTime } from '@/lib/utils'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
+import { MIN_OFFSET_MS, MAX_OFFSET_MS, clampOffsetMs } from '@/lib/audio/latency'
 import type { AudioEngine } from '@/lib/audio/AudioEngine'
+import type { CapturedVoice } from '@/lib/audio/captureSession'
 import type { VoicePart, Track } from '@/types/app.types'
 
+export interface ReviewSaveState {
+  hearVoice: boolean
+  voiceVol: number
+  activeVoices: Set<VoicePart>
+  trackVolumes: Partial<Record<VoicePart, number>>
+  offsetMs: number
+  /** Mémoriser ce réglage comme latence de cet appareil pour les prochaines prises */
+  remember: boolean
+}
+
 interface ReviewPanelProps {
-  blob: Blob
+  voice: CapturedVoice
   elapsed: number
   engine: AudioEngine
   loadedTracks: Partial<Record<VoicePart, Track>>
   recordedWithVoices: Set<VoicePart>
-  trackVolumes: Partial<Record<VoicePart, number>>   // volumes set before recording
-  onSave: (state: {
-    hearVoice: boolean
-    voiceVol: number
-    activeVoices: Set<VoicePart>
-    trackVolumes: Partial<Record<VoicePart, number>>
-  }) => Promise<void>
+  trackVolumes: Partial<Record<VoicePart, number>>   // volumes réglés avant l'enregistrement
+  /** Décalage de départ (latence mesurée/estimée de l'appareil) */
+  initialOffsetMs: number
+  routeLabel: string
+  /** Progression de l'encodage MP3 (0–1), null hors sauvegarde */
+  saveProgress: number | null
+  onSave: (state: ReviewSaveState) => Promise<void>
   onRetry: () => void
   onDiscard: () => void
 }
 
+const MAX_VOICE_VOL = 5
+
+/**
+ * Gain de départ de la voix : amène le niveau crête « utile » à environ −1 dBFS.
+ * Le 99,5e centile (et non le maximum) évite qu'un claquement isolé fixe le gain.
+ */
+function computeAutoGain(samples: Int16Array): number {
+  if (samples.length === 0) return 1
+  const bins = new Uint32Array(256)
+  const stride = Math.max(1, Math.floor(samples.length / 400000))
+  let count = 0
+  for (let i = 0; i < samples.length; i += stride) {
+    bins[Math.min(255, Math.abs(samples[i]) >> 7)]++
+    count++
+  }
+  let acc = 0
+  let level = 0
+  for (let b = 0; b < 256; b++) {
+    acc += bins[b]
+    if (acc >= count * 0.995) { level = (b + 1) * 128; break }
+  }
+  const peak = level / 32768
+  if (peak <= 0.002) return 1             // silence : ne pas amplifier du bruit
+  const gain = 0.9 / peak
+  return Math.max(1, Math.min(MAX_VOICE_VOL, Math.round(gain * 20) / 20))
+}
+
 export function ReviewPanel({
-  blob, elapsed, engine, loadedTracks, recordedWithVoices,
-  trackVolumes, onSave, onRetry, onDiscard,
+  voice, elapsed, engine, loadedTracks, recordedWithVoices,
+  trackVolumes, initialOffsetMs, routeLabel, saveProgress, onSave, onRetry, onDiscard,
 }: ReviewPanelProps) {
-  const [ready, setReady]         = useState(false)
+  const [ready, setReady]             = useState(false)
   const [decodeError, setDecodeError] = useState(false)
-  const [saving, setSaving]       = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [saving, setSaving]           = useState(false)
+  const [isPlaying, setIsPlaying]     = useState(false)
 
   // ── Voice controls ────────────────────────────────────────────────────────
+  // Le volume de départ est calculé sur l'enregistrement (voix faible = micro éloigné ou micro
+  // de casque) : la voix est amenée à un niveau audible sans saturer. Réglable ensuite.
   const [hearVoice, setHearVoice] = useState(true)
-  const [voiceVol, setVoiceVol]   = useState(1.0)   // 0–1.5
+  const autoGain = useMemo(() => computeAutoGain(voice.samples), [voice])
+  const [voiceVol, setVoiceVol]   = useState(autoGain)   // 0–MAX_VOICE_VOL
+
+  // ── Synchronisation (ms, positif = voix avancée) ──────────────────────────
+  const [offsetMs, setOffsetMs]   = useState(clampOffsetMs(initialOffsetMs))
+  const [remember, setRemember]   = useState(true)
 
   // ── Track toggles: only tracks used during recording, all ON by default ──
   const [trackOn, setTrackOn] = useState<Partial<Record<VoicePart, boolean>>>(() => {
@@ -45,34 +91,36 @@ export function ReviewPanel({
     return init
   })
 
-  // ── Decoded voice buffer ──────────────────────────────────────────────────
   const voiceBufferRef   = useRef<AudioBuffer | null>(null)
-  const voiceGainNodeRef = useRef<GainNode | null>(null)   // kept for live vol updates
+  const voiceGainNodeRef = useRef<GainNode | null>(null)
   const sourcesRef       = useRef<AudioBufferSourceNode[]>([])
+  const canvasRef        = useRef<HTMLCanvasElement>(null)
 
-  // ── Waveform canvas ───────────────────────────────────────────────────────
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Valeurs courantes pour les callbacks (évite les fermetures périmées)
+  const offsetRef    = useRef(offsetMs)
+  offsetRef.current  = offsetMs
+  const playingRef   = useRef(false)
+  playingRef.current = isPlaying
 
-  // ── Decode blob once ──────────────────────────────────────────────────────
+  // ── Construit le buffer de voix à partir du PCM capturé ───────────────────
   useEffect(() => {
-    if (!blob || blob.size < 100) { setDecodeError(true); return }
+    if (voice.samples.length < voice.sampleRate * 0.3) { setDecodeError(true); return }
     const ctx = engine.getContext()
     if (ctx.state === 'suspended') ctx.resume().catch(() => {})
-    blob.arrayBuffer()
-      .then(ab => ctx.decodeAudioData(ab))
-      .then(buf => {
-        voiceBufferRef.current = buf
-        setReady(true)
-        setTimeout(() => drawWaveform(), 50)
-      })
-      .catch(err => {
-        console.error('ReviewPanel decode error', err)
-        setDecodeError(true)
-      })
-
+    try {
+      const buf = ctx.createBuffer(1, voice.samples.length, voice.sampleRate)
+      const ch = buf.getChannelData(0)
+      for (let i = 0; i < voice.samples.length; i++) ch[i] = voice.samples[i] / 32768
+      voiceBufferRef.current = buf
+      setReady(true)
+      setTimeout(() => drawWaveform(), 50)
+    } catch (err) {
+      console.error('ReviewPanel buffer error', err)
+      setDecodeError(true)
+    }
     return () => { _stopAll() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blob])
+  }, [voice])
 
   // ── Live voice volume update ──────────────────────────────────────────────
   useEffect(() => {
@@ -80,6 +128,14 @@ export function ReviewPanel({
       voiceGainNodeRef.current.gain.value = hearVoice ? voiceVol : 0
     }
   }, [voiceVol, hearVoice])
+
+  // ── Réglage de synchro : on relance l'écoute depuis le début pour entendre l'effet ──
+  useEffect(() => {
+    if (!playingRef.current) return
+    const t = setTimeout(() => { void startReviewPlay() }, 150)
+    return () => clearTimeout(t)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offsetMs])
 
   // ── Waveform drawing ──────────────────────────────────────────────────────
   function drawWaveform() {
@@ -93,7 +149,6 @@ export function ReviewPanel({
     const data = buf.getChannelData(0)
     const step = Math.ceil(data.length / W)
     const mid  = canvas.height / 2
-    // Color matches active state (like index.html)
     const anyTrack = VOICE_PARTS.some(v => trackOn[v])
     const color = hearVoice && anyTrack ? '#E8C547'
                 : hearVoice             ? '#4ADE80'
@@ -107,27 +162,37 @@ export function ReviewPanel({
     }
   }
 
-  // Redraw when toggles change
   useEffect(() => { drawWaveform() }, [hearVoice, trackOn])
 
   // ── Audio helpers ─────────────────────────────────────────────────────────
   function _stopAll() {
-    for (const s of sourcesRef.current) { try { s.stop() } catch { /* ignore */ } }
+    for (const s of sourcesRef.current) {
+      s.onended = null
+      try { s.stop() } catch { /* ignore */ }
+    }
     sourcesRef.current = []
     voiceGainNodeRef.current = null
   }
 
-  // Matches index.html startReviewPlay() exactly
+  /**
+   * Même règle de synchro que le rendu final (renderMixMp3) :
+   * - voix avancée de offsetMs  → on saute le début de la voix
+   * - voix retardée (offset < 0) → on la lance plus tard
+   * Les pistes partent toutes à `when`, sur la même horloge.
+   */
   async function startReviewPlay() {
     const voiceBuf = voiceBufferRef.current
     if (!voiceBuf) return
-    // iOS: always await resume — context may be suspended even if state reports 'running'
     await engine.resumeContext()
     const aac = engine.getContext()
     _stopAll()
 
     const newSources: AudioBufferSourceNode[] = []
     voiceGainNodeRef.current = null
+
+    const when      = aac.currentTime + 0.08
+    const offsetSec = offsetRef.current / 1000
+    const outLen    = Math.max(0.05, voiceBuf.duration - offsetSec)
 
     // ── Voice ─────────────────────────────────────────────────────────────
     if (hearVoice) {
@@ -139,11 +204,9 @@ export function ReviewPanel({
       const vSrc = aac.createBufferSource()
       vSrc.buffer = voiceBuf
       vSrc.connect(vGain)
-      vSrc.start(0)
-      vSrc.onended = () => {
-        // Natural end: stop everything (backing tracks may still be running)
-        stopReviewPlay()
-      }
+      if (offsetSec >= 0) vSrc.start(when, Math.min(offsetSec, Math.max(0, voiceBuf.duration - 0.01)))
+      else                vSrc.start(when - offsetSec, 0)
+      vSrc.onended = () => { stopReviewPlay() }
       newSources.push(vSrc)
     }
 
@@ -152,15 +215,15 @@ export function ReviewPanel({
       if (!trackOn[v]) continue
       const buf = engine.getBuffer(v)
       if (!buf) continue
-      const vol = trackVolumes[v] ?? 0.8
       const g = aac.createGain()
-      g.gain.value = vol
+      g.gain.value = trackVolumes[v] ?? 0.8
       g.connect(aac.destination)
       const s = aac.createBufferSource()
       s.buffer = buf
-      // Limit backing track to voice recording duration (prevents tracks playing past voice end)
-      s.start(0, 0, voiceBuf.duration)
       s.connect(g)
+      s.start(when, 0, outLen)
+      // Sans voix, c'est la piste qui marque la fin de l'écoute
+      if (!hearVoice && newSources.length === 0) s.onended = () => { stopReviewPlay() }
       newSources.push(s)
     }
 
@@ -178,34 +241,37 @@ export function ReviewPanel({
     if (isPlaying) {
       stopReviewPlay()
     } else {
-      // iOS: trigger resume synchronously within the user gesture, then start async
       engine.resumeContext().catch(() => {})
-      startReviewPlay()
+      void startReviewPlay()
     }
   }
 
-  // Toggle voice: stop playback (user must re-press play), like index.html
   function handleToggleVoice() {
     stopReviewPlay()
     setHearVoice(v => !v)
   }
 
-  // Toggle track: stop playback (user must re-press play), like index.html
   function handleToggleTrack(v: VoicePart) {
     stopReviewPlay()
     setTrackOn(prev => ({ ...prev, [v]: !prev[v] }))
   }
 
+  function nudge(deltaMs: number) {
+    setOffsetMs(prev => clampOffsetMs(prev + deltaMs))
+  }
+
   async function handleSave() {
+    stopReviewPlay()
     setSaving(true)
     const activeVoices = new Set(VOICE_PARTS.filter(v => trackOn[v]))
     try {
-      await onSave({ hearVoice, voiceVol, activeVoices, trackVolumes })
+      await onSave({ hearVoice, voiceVol, activeVoices, trackVolumes, offsetMs, remember })
     } finally { setSaving(false) }
   }
 
-  // ── Which tracks to show: only those used during recording ────────────────
   const reviewTracks = VOICE_PARTS.filter(v => recordedWithVoices.has(v) && engine.hasBuffer(v))
+  const offsetLabel  = `${offsetMs > 0 ? '+' : ''}${offsetMs} ms`
+  const pct          = ((offsetMs - MIN_OFFSET_MS) / (MAX_OFFSET_MS - MIN_OFFSET_MS)) * 100
 
   if (decodeError) {
     return (
@@ -226,7 +292,6 @@ export function ReviewPanel({
         </div>
       </div>
 
-      {/* ── Review card (same layout as index.html) ────────────────────────── */}
       <div className="bg-studio-surface border border-studio-border rounded-xl p-4 mb-4">
         <div className="text-[10px] text-studio-muted uppercase tracking-wider mb-3">
           Réécoute — Choisissez ce que vous entendez
@@ -252,7 +317,7 @@ export function ReviewPanel({
             🎤 Ma voix
           </span>
           <div
-            className="w-[18px] h-[18px] rounded border-2 flex items-center justify-content flex-shrink-0 transition-all text-[11px]"
+            className="w-[18px] h-[18px] rounded border-2 flex items-center justify-center flex-shrink-0 transition-all text-[11px]"
             style={hearVoice
               ? { background: '#4ADE80', borderColor: '#4ADE80', color: '#0a0a0f' }
               : { background: 'transparent', borderColor: '#333', color: 'transparent' }
@@ -266,12 +331,12 @@ export function ReviewPanel({
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
           <span className="text-[11px] text-studio-muted uppercase tracking-wide w-16">Vol. voix</span>
           <input
-            type="range" min={0} max={150} step={1}
+            type="range" min={0} max={MAX_VOICE_VOL * 100} step={1}
             value={Math.round(voiceVol * 100)}
             onChange={e => setVoiceVol(parseInt(e.target.value) / 100)}
             className="flex-1 h-[3px] rounded accent-[#4ADE80]"
             style={{
-              background: `linear-gradient(90deg,#4ADE80 ${(voiceVol/1.5)*100}%,#2a2418 ${(voiceVol/1.5)*100}%)`
+              background: `linear-gradient(90deg,#4ADE80 ${(voiceVol / MAX_VOICE_VOL) * 100}%,#2a2418 ${(voiceVol / MAX_VOICE_VOL) * 100}%)`
             }}
           />
           <span className="text-[12px] w-9 text-right tabular-nums" style={{ color: '#4ADE80' }}>
@@ -323,7 +388,7 @@ export function ReviewPanel({
           style={{ display: ready ? 'block' : 'none', height: '44px' }}
         />
         {!ready && (
-          <div className="text-[11px] text-studio-muted text-center py-4">Décodage…</div>
+          <div className="text-[11px] text-studio-muted text-center py-4">Préparation…</div>
         )}
 
         {/* ── Play button ──────────────────────────────────────────────────── */}
@@ -338,7 +403,73 @@ export function ReviewPanel({
         </div>
       </div>
 
+      {/* ── Synchronisation voix / pistes ──────────────────────────────────── */}
+      <div className="bg-studio-surface border border-studio-border rounded-xl p-4 mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-[10px] text-studio-muted uppercase tracking-wider">
+            Synchronisation de la voix
+          </div>
+          <div className="text-[13px] tabular-nums" style={{ color: '#E8C547' }}>{offsetLabel}</div>
+        </div>
+        <div className="text-[11px] text-studio-muted mb-3">
+          Réglé pour : {routeLabel}. Si votre voix paraît en retard sur la musique, avancez-la ;
+          si elle paraît en avance, retardez-la. L&apos;écoute repart du début à chaque réglage.
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => nudge(-10)}
+            className="w-9 h-9 rounded-lg border border-studio-border2 text-studio-muted hover:text-studio-gold hover:border-studio-gold transition-colors text-sm"
+            aria-label="Retarder la voix de 10 ms"
+          >−</button>
+          <input
+            type="range"
+            min={MIN_OFFSET_MS} max={MAX_OFFSET_MS} step={1}
+            value={offsetMs}
+            onChange={e => setOffsetMs(clampOffsetMs(parseInt(e.target.value)))}
+            className="flex-1 h-[3px] rounded"
+            style={{
+              accentColor: '#E8C547',
+              background: `linear-gradient(90deg,#E8C547 ${pct}%,#2a2418 ${pct}%)`,
+            }}
+            aria-label="Décalage de la voix en millisecondes"
+          />
+          <button
+            onClick={() => nudge(10)}
+            className="w-9 h-9 rounded-lg border border-studio-border2 text-studio-muted hover:text-studio-gold hover:border-studio-gold transition-colors text-sm"
+            aria-label="Avancer la voix de 10 ms"
+          >+</button>
+        </div>
+        <div className="flex justify-between text-[10px] text-[#444] mt-1 px-11">
+          <span>voix plus tard</span>
+          <span>voix plus tôt</span>
+        </div>
+
+        <label className="flex items-center gap-2 mt-3 text-[11px] text-studio-muted cursor-pointer">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={e => setRemember(e.target.checked)}
+            className="accent-[#E8C547]"
+          />
+          Mémoriser ce réglage pour cet appareil ({routeLabel})
+        </label>
+      </div>
+
       {/* ── Action buttons ───────────────────────────────────────────────────── */}
+      {saveProgress !== null && (
+        <div className="mb-3">
+          <div className="text-[11px] text-studio-muted mb-1 text-center">
+            Préparation du fichier… {Math.round(saveProgress * 100)}%
+          </div>
+          <div className="h-1 bg-studio-border rounded">
+            <div
+              className="h-full rounded"
+              style={{ width: `${saveProgress * 100}%`, background: 'linear-gradient(90deg,#B8962A,#E8C547)' }}
+            />
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 mb-2">
         <Button variant="green" size="lg" loading={saving} onClick={handleSave}>
           ✓ Sauvegarder

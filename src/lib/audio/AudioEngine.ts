@@ -31,7 +31,8 @@ export class AudioEngine {
   getContext(): AudioContext {
     if (!this.ctx) {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      this.ctx = new Ctx()
+      // 'interactive' = latence de sortie minimale (important pour chanter par-dessus les pistes)
+      this.ctx = new Ctx({ latencyHint: 'interactive' })
       this.masterGain = this.ctx.createGain()
       this.masterGain.connect(this.ctx.destination)
     }
@@ -75,7 +76,8 @@ export class AudioEngine {
 
   get currentTime(): number {
     if (!this._playing || !this.ctx) return this._startOffset
-    const elapsed = (this.ctx.currentTime - this._startTime) * this._playbackRate
+    // Avant l'instant planifié (play(offset, when) dans le futur), on reste au point de départ.
+    const elapsed = Math.max(0, this.ctx.currentTime - this._startTime) * this._playbackRate
     const rawTime = this._startOffset + elapsed
 
     if (this._loopEnabled && this.duration > 0) {
@@ -94,7 +96,13 @@ export class AudioEngine {
   }
 
   // ── Playback ──────────────────────────────────────────────────────────────
-  async play(offset?: number): Promise<void> {
+  /**
+   * @param offset position de départ dans les pistes (secondes)
+   * @param when   instant AudioContext (secondes) auquel démarrer. Toutes les pistes
+   *               partent exactement à cet instant, ce qui permet de caler l'enregistrement
+   *               de la voix dessus. Par défaut : immédiatement.
+   */
+  async play(offset?: number, when?: number): Promise<void> {
     await this.resumeContext()
     if (this._playing) this._stopSources()
 
@@ -122,7 +130,7 @@ export class AudioEngine {
         source.loopEnd   = this._loopB * dur
       }
       // FIX: never pass a duration arg when looping (causes RangeError when offset > loopEnd)
-      source.start(0, startOffset)
+      source.start(when ?? 0, startOffset)
 
       source.onended = () => {
         activeCount--
@@ -138,7 +146,7 @@ export class AudioEngine {
       this.sources[voice] = source
     }
 
-    this._startTime   = ctx.currentTime
+    this._startTime   = when ?? ctx.currentTime
     this._startOffset = startOffset
     this._playing     = true
     this._startAnimation()
