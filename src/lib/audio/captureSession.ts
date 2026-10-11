@@ -31,11 +31,17 @@ export class CaptureSession {
   private chunks: Chunk[] = []
   private keepFrom = 0
   private flushWaiter: (() => void) | null = null
+  private maxAbs = 0
 
   constructor(private readonly ctx: AudioContext) {}
 
   get sampleRate(): number {
     return this.ctx.sampleRate
+  }
+
+  /** Niveau crête (0–1) reçu du micro depuis l'ouverture. ~0 = micro muet ou non autorisé. */
+  get peak(): number {
+    return this.maxAbs / 32768
   }
 
   /** Branche le micro et commence à collecter (rien n'est gardé avant begin()). */
@@ -101,6 +107,10 @@ export class CaptureSession {
   }
 
   private push(frame: number, data: Int16Array) {
+    for (let i = 0; i < data.length; i++) {
+      const a = data[i] < 0 ? -data[i] : data[i]
+      if (a > this.maxAbs) this.maxAbs = a
+    }
     if (frame + data.length <= this.keepFrom) return
     this.chunks.push({ frame, data })
   }

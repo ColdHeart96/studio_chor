@@ -13,6 +13,7 @@ import {
   ROUTE_LABELS, getRoute, estimateLatencyMs, storeLatencyMs, type OutputRoute,
 } from '@/lib/audio/latency'
 import { LatencyPanel } from '@/components/recorder/LatencyPanel'
+import { RefreshHint } from '@/components/ui/RefreshHint'
 import type { ReviewSaveState } from '@/components/recorder/ReviewPanel'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
 import { Card, SectionLabel } from '@/components/ui/Card'
@@ -28,7 +29,7 @@ export function RecordTab() {
   const { activeOrg } = useOrgContext()
   const { saveTake }  = useTakes(user?.id, activeOrg?.id)
   const {
-    state, countdown, elapsed, stream, voice, error,
+    state, countdown, elapsed, stream, voice, error, noSignal,
     startCountdown, stopRecording, restartRecording, discardRecording,
   } = useRecorder()
 
@@ -221,6 +222,13 @@ export function RecordTab() {
           </div>
         </div>
 
+        {noSignal && (
+          <RefreshHint className="mb-4" title="Aucun son n'est capté par le micro">
+            Vérifiez que le navigateur a bien l&apos;autorisation d&apos;utiliser le microphone (réglages du
+            navigateur ou du téléphone), puis réactualisez la page et recommencez.
+          </RefreshHint>
+        )}
+
         <Card className="mb-4">
           <div className="flex items-center gap-3 mb-2.5">
             <span className="text-xs text-[#888]">Micro</span>
@@ -287,9 +295,9 @@ export function RecordTab() {
   return (
     <div>
       {error && (
-        <div className="p-4 bg-[#1a1010] border border-[#2a1010] rounded-xl text-[13px] text-[#886655] mb-4">
-          ⚠ {error}
-        </div>
+        <RefreshHint className="mb-4" title={error}>
+          Autorisez le micro pour ce site dans les réglages, puis réactualisez la page.
+        </RefreshHint>
       )}
 
       <SectionLabel>Microphone</SectionLabel>

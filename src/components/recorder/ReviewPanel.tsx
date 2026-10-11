@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/Button'
+import { RefreshHint } from '@/components/ui/RefreshHint'
 import { formatTime } from '@/lib/utils'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
 import { MIN_OFFSET_MS, MAX_OFFSET_MS, clampOffsetMs } from '@/lib/audio/latency'
@@ -76,6 +77,15 @@ export function ReviewPanel({
   // de casque) : la voix est amenée à un niveau audible sans saturer. Réglable ensuite.
   const [hearVoice, setHearVoice] = useState(true)
   const autoGain = useMemo(() => computeAutoGain(voice.samples), [voice])
+  // Voix quasi muette : micro non autorisé, coupé ou masqué
+  const silent = useMemo(() => {
+    let peak = 0
+    for (let i = 0; i < voice.samples.length; i += 7) {
+      const a = Math.abs(voice.samples[i])
+      if (a > peak) peak = a
+    }
+    return peak / 32768 < 0.003
+  }, [voice])
   const [voiceVol, setVoiceVol]   = useState(autoGain)   // 0–MAX_VOICE_VOL
 
   // ── Synchronisation (ms, positif = voix avancée) ──────────────────────────
@@ -286,11 +296,18 @@ export function ReviewPanel({
 
   return (
     <div>
-      <div className="text-center mb-4">
-        <div className="text-[13px] text-studio-green tracking-wide">
-          ✓ Enregistrement capturé — {formatTime(elapsed)}
+      {silent ? (
+        <RefreshHint className="mb-4" title="Votre voix n'a pas été enregistrée (aucun son capté)">
+          Le micro n&apos;a rien entendu : il est sans doute non autorisé ou coupé. Autorisez le microphone
+          pour ce site, puis réactualisez la page et recommencez.
+        </RefreshHint>
+      ) : (
+        <div className="text-center mb-4">
+          <div className="text-[13px] text-studio-green tracking-wide">
+            ✓ Enregistrement capturé — {formatTime(elapsed)}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-studio-surface border border-studio-border rounded-xl p-4 mb-4">
         <div className="text-[10px] text-studio-muted uppercase tracking-wider mb-3">

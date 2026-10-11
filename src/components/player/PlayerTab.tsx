@@ -7,6 +7,7 @@ import { extractPeaks } from '@/lib/audio/waveformUtils'
 import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
 import { SectionLabel } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
+import { RefreshHint } from '@/components/ui/RefreshHint'
 import { WaveformRenderer } from '@/components/waveform/WaveformRenderer'
 import { VoiceMixer } from '@/components/player/VoiceMixer'
 import { TransportControls } from '@/components/player/TransportControls'
@@ -37,6 +38,9 @@ export function PlayerTab() {
   const [peaksMap, setPeaksMap]         = useState<Partial<Record<VoicePart, number[]>>>({})
   const [loadingTrack, setLoadingTrack] = useState<VoicePart | null>(null)
   const [status, setStatus]             = useState('Aucune piste chargée')
+  // Pistes en échec de chargement / lecture lancée mais sans avancer
+  const [loadFailed, setLoadFailed]     = useState(0)
+  const [playStuck, setPlayStuck]       = useState(false)
 
   // ── Mix state (volume / mute / solo) ──────────────────────────────────────
   const [mixState, setMixState] = useState<MixStateMap>(DEFAULT_MIX)
@@ -50,6 +54,22 @@ export function PlayerTab() {
       engine.setVolume(v as VoicePart, effective)
     }
   }, [engine])
+
+  // Lance / met en pause, puis vérifie que la lecture avance vraiment : sinon (son non autorisé,
+  // contexte audio suspendu par le navigateur…), on invite à réactualiser la page.
+  function handleTogglePlay() {
+    const wasPlaying = engine.playing
+    setPlayStuck(false)
+    void togglePlay()
+    if (wasPlaying) return
+    const before = engine.currentTime
+    window.setTimeout(() => {
+      const ctxState = engine.getContext().state
+      if (ctxState !== 'running' || (engine.playing && engine.currentTime === before)) {
+        setPlayStuck(true)
+      }
+    }, 1500)
+  }
 
   function handleVolumeChange(voice: VoicePart, vol: number) {
     setMixState(prev => {
@@ -131,6 +151,7 @@ export function PlayerTab() {
     })
 
     async function loadAll() {
+      setLoadFailed(0)
       for (const track of tracks) {
         if (!track.url) continue
         setLoadingTrack(track.voice_part)
@@ -145,6 +166,7 @@ export function PlayerTab() {
           }
         } catch (e) {
           console.error('Erreur chargement piste', track.voice_part, e)
+          setLoadFailed(n => n + 1)
         }
       }
       setLoadingTrack(null)
@@ -172,6 +194,17 @@ export function PlayerTab() {
         <div className="flex items-center gap-2 text-xs text-studio-muted mb-4">
           <Spinner size="sm" /> Chargement : {VOICE_LABELS[loadingTrack]}…
         </div>
+      )}
+      {loadFailed > 0 && !loadingTrack && (
+        <RefreshHint className="mb-4" title={`${loadFailed} piste(s) n'ont pas pu être chargées`}>
+          Vérifiez votre connexion, puis réactualisez la page.
+        </RefreshHint>
+      )}
+      {playStuck && (
+        <RefreshHint className="mb-4" title="La lecture ne démarre pas ?">
+          Réactualisez la page. Vérifiez aussi que le son du téléphone est activé (mode silencieux
+          désactivé) et que le navigateur est autorisé à jouer du son.
+        </RefreshHint>
       )}
       {!hasLoaded && !loading && !loadingTrack && (
         <div className="text-center py-12 text-studio-muted">
@@ -214,7 +247,7 @@ export function PlayerTab() {
             duration={duration}
             loopEnabled={loopEnabled}
             timeRef={timeRef}
-            onTogglePlay={togglePlay}
+            onTogglePlay={handleTogglePlay}
             onSeekFraction={seekFraction}
             onToggleLoop={() => setLoop(!loopEnabled)}
             onSeekBarClick={handleSeekBarClick}

@@ -25,6 +25,17 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
 
   return (
     <div className="space-y-2">
+      {/* Légende des boutons */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-studio-muted pb-1">
+        <span>
+          <span className="inline-block px-1.5 rounded border border-studio-border text-studio-gold mr-1">S</span>
+          <b className="font-normal text-studio-text">Solo</b> : n&apos;écouter que cette voix
+        </span>
+        <span>
+          <span className="inline-block px-1.5 rounded border border-studio-border text-studio-red mr-1">M</span>
+          <b className="font-normal text-studio-text">Muet</b> : couper cette voix
+        </span>
+      </div>
       {loadedParts.map(voice => {
         const state = mixState[voice]
         const color = VOICE_COLORS[voice]
@@ -69,7 +80,8 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
             {/* Solo */}
             <button
               onClick={() => onSoloToggle(voice)}
-              title="Solo"
+              title="Solo : n'écouter que cette voix"
+              aria-label={`Solo ${VOICE_LABELS[voice]}`}
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] border font-serif transition-all',
                 state.solo
@@ -83,7 +95,8 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
             {/* Mute */}
             <button
               onClick={() => onMuteToggle(voice)}
-              title="Mute"
+              title="Muet : couper cette voix"
+              aria-label={`Muet ${VOICE_LABELS[voice]}`}
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] border font-serif transition-all',
                 state.muted

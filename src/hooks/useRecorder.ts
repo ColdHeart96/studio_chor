@@ -18,6 +18,8 @@ export function useRecorder() {
   const [stream, setStream]       = useState<MediaStream | null>(null)
   const [voice, setVoice]         = useState<CapturedVoice | null>(null)
   const [error, setError]         = useState<string | null>(null)
+  // Vrai si le micro n'a rien livré après quelques secondes (autorisation manquante, micro coupé)
+  const [noSignal, setNoSignal]   = useState(false)
 
   const sessionRef     = useRef<CaptureSession | null>(null)
   const streamRef      = useRef<MediaStream | null>(null)
@@ -111,11 +113,13 @@ export function useRecorder() {
 
     setState('recording')
     setElapsed(0)
+    setNoSignal(false)
 
     let secs = 0
     elapsedTimer.current = setInterval(() => {
       secs++
       setElapsed(secs)
+      if (secs === 4 && session.peak < 0.002) setNoSignal(true)
       if (secs >= MAX_RECORDING_SECONDS) void stopRecording()
     }, 1000)
   }
@@ -142,6 +146,7 @@ export function useRecorder() {
     sessionRef.current = null
     releaseMic()
     setVoice(null)
+    setNoSignal(false)
     setState('idle')
     setElapsed(0)
   }
@@ -157,6 +162,7 @@ export function useRecorder() {
     stream,
     voice,
     error,
+    noSignal,
     startCountdown,
     stopRecording,
     restartRecording,

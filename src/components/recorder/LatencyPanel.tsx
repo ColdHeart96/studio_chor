@@ -27,6 +27,7 @@ import {
   type LatencySource,
 } from '@/lib/audio/latency'
 import { Spinner } from '@/components/ui/Spinner'
+import { RefreshHint } from '@/components/ui/RefreshHint'
 
 interface LatencyPanelProps {
   route: OutputRoute
@@ -70,6 +71,8 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
   const [phase, setPhase]       = useState<CalibrationPhase | null>(null)
   const [message, setMessage]   = useState<{ ok: boolean; text: string } | null>(null)
   const [micInfo, setMicInfo]   = useState<string | null>(null)
+  // Le micro ne livre aucun son (autorisation manquante) : on propose de réactualiser
+  const [noMicSignal, setNoMicSignal] = useState(false)
   const [estimate, setEstimate] = useState(() => estimateLatencyMs(null, route))
   const [mics, setMics]         = useState<MicDevice[]>([])
   const [micId, setMicId]       = useState<string>('')
@@ -149,6 +152,8 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
 
         let hold = -90
         let holdUntil = 0
+        let lastSound = performance.now()
+        let armed = false   // devient vrai une fois le casque prêt (bascule Bluetooth terminée)
         const tick = () => {
           analyser.getFloatTimeDomainData(buf)
           let peak = 0
@@ -156,6 +161,9 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
           const db = peak <= 0.00003 ? -90 : Math.max(-90, 20 * Math.log10(peak))
           const now = performance.now()
           if (db >= hold || now > holdUntil) { hold = db; holdUntil = now + 700 }
+          if (db > -78) lastSound = now
+          // Rien du tout pendant 6 s après la préparation : autorisation manquante ou micro coupé
+          if (armed && now - lastSound > 6000) setNoMicSignal(true)
           setLevelDb(Math.round(hold))
           raf = requestAnimationFrame(tick)
         }
@@ -167,6 +175,8 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
         if (stopped) return
         if (ctx.state !== 'running') await ctx.resume()
         setTestReady(true)
+        armed = true
+        lastSound = performance.now()
 
         const chirp = makeChirpBuffer(ctx)
         const gain = ctx.createGain()
@@ -180,7 +190,8 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
         play()
         timer = setInterval(play, 800)
       } catch {
-        setMessage({ ok: false, text: 'Accès au micro refusé.' })
+        setMessage({ ok: false, text: 'Accès au micro refusé : autorisez-le dans les réglages, puis réactualisez la page.' })
+        setNoMicSignal(true)
         stop()
       }
     })()
@@ -220,6 +231,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
   async function run(ctx: AudioContext) {
     setBusy(true)
     setMessage(null)
+    setNoMicSignal(false)
     let stream: MediaStream | null = null
     try {
       stream = await requestMicrophoneAccess(await resolveMicDeviceId(route))
@@ -244,6 +256,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
               + 'Vous pourrez l\'affiner avec le curseur à la réécoute.',
         })
       } else {
+        setNoMicSignal(result.reason === 'no_signal')
         setMessage({ ok: false, text: failureMessage(result, route) })
       }
       void listMicrophones().then(setMics)
@@ -431,6 +444,13 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
             <div className="text-[11px] mt-3" style={{ color: message.ok ? '#4ADE80' : '#FF9944' }}>
               {message.text}
             </div>
+          )}
+          {noMicSignal && (
+            <RefreshHint className="mt-3" title="Aucun son n'arrive du micro">
+              Le plus souvent, l&apos;autorisation du micro a été accordée après le chargement de la page :
+              réactualisez la page, puis relancez le test. Sinon, rapprochez l&apos;oreillette du micro et
+              mettez le volume du casque au maximum.
+            </RefreshHint>
           )}
           {micInfo && (
             <div className="text-[10px] mt-2 text-[#555] break-words whitespace-pre-wrap">{micInfo}</div>
