@@ -6,7 +6,7 @@ import { useRecorder } from '@/hooks/useRecorder'
 import { useTracks } from '@/hooks/useTracks'
 import { useTakes } from '@/hooks/useTakes'
 import { uploadTake } from '@/lib/storage'
-import { renderMixMp3 } from '@/lib/audio/mixUtils'
+import { renderMixMp3, MIX_OUTPUT } from '@/lib/audio/mixUtils'
 import { formatTime } from '@/lib/utils'
 import { getAudioEngine } from '@/lib/audio/AudioEngine'
 import {
@@ -188,7 +188,9 @@ export function RecordTab() {
           sample_rate:    voice.sampleRate,
           base_latency:   ctx.baseLatency ?? null,
           output_latency: typeof ctx.outputLatency === 'number' ? ctx.outputLatency : null,
-          mp3_kbps:       128,
+          mp3_kbps:       MIX_OUTPUT.kbps,
+          mp3_channels:   MIX_OUTPUT.channels,
+          mp3_rate:       MIX_OUTPUT.sampleRate,
           user_agent:     typeof navigator !== 'undefined' ? navigator.userAgent : null,
         },
         orgId: activeOrg?.id,
