@@ -52,8 +52,16 @@ export interface MixResult {
   durationSec: number
 }
 
-const MP3_KBPS = 128
+// Réglages de sortie. L'encodage MP3 (JavaScript) est le goulot d'étranglement, pas le rendu :
+// mesuré sur 2 min — stéréo 48 kHz 12,5 s ; stéréo 32 kHz 6,1 s ; mono 32 kHz 2,9 s.
+// Mono 32 kHz / 96 kbps suffit pour une voix + un accompagnement de chorale, et le fichier
+// pèse ~0,7 Mo par minute.
+const OUT_RATE = 32000
+const OUT_CHANNELS = 1
+const MP3_KBPS = 96
 const SEGMENT_SECONDS = 30
+
+export const MIX_OUTPUT = { sampleRate: OUT_RATE, channels: OUT_CHANNELS, kbps: MP3_KBPS } as const
 
 const nextTick = () => new Promise<void>(r => setTimeout(r, 0))
 
@@ -69,11 +77,11 @@ function toInt16(channel: Float32Array): Int16Array {
 /**
  * Mixe la voix captée et les pistes choisies dans UN fichier MP3 déjà synchronisé.
  *
- * - La voix est décalée de `offsetMs` (compensation de latence), à l'échantillon près.
- * - Le rendu se fait par segments de 30 s : la mémoire reste bornée même pour 10 min
- *   (l'ancien rendu d'un bloc stéréo flottant pouvait dépasser 200 Mo sur téléphone).
- * - Fichier final ~1 Mo/min : lisible partout (lecteur de l'app, téléchargement,
- *   WhatsApp…), et la synchro est « cuite » dans le fichier.
+ * - La voix est décalée de `offsetMs` (compensation de latence), à l'échantillon près
+ *   (calculé sur la fréquence de capture, avant tout rééchantillonnage).
+ * - Le rendu se fait par segments de 30 s : la mémoire reste bornée même pour 10 min.
+ * - Sortie mono 32 kHz : lisible partout (lecteur de l'app, téléchargement, WhatsApp…),
+ *   et la synchro est « cuite » dans le fichier.
  */
 export async function renderMixMp3(
   voice: CapturedVoice,
@@ -81,7 +89,7 @@ export async function renderMixMp3(
   options: MixOptions,
 ): Promise<MixResult> {
   const { hearVoice, voiceVol, activeVoices, trackVolumes, offsetMs, onProgress } = options
-  const sr = voice.sampleRate
+  const vr = voice.sampleRate                       // fréquence de capture de la voix
   const tracks = VOICE_PARTS
     .filter(v => activeVoices.has(v))
     .map(v => ({ voice: v, buffer: engine.getBuffer(v) }))
@@ -90,24 +98,29 @@ export async function renderMixMp3(
   // Rien d'autre que la voix à entendre : on garde la voix (jamais de fichier vide).
   const includeVoice = hearVoice || tracks.length === 0
 
-  const shift = Math.round((offsetMs / 1000) * sr)   // > 0 : on saute le début de la voix
+  const shift    = Math.round((offsetMs / 1000) * vr)   // > 0 : on saute le début de la voix
   const voiceLen = voice.samples.length
-  const totalLen = Math.max(0, voiceLen - shift)
+  const totalSec = Math.max(0, (voiceLen - shift) / vr)
+  const totalLen = Math.round(totalSec * OUT_RATE)
   if (totalLen === 0) throw new Error('Enregistrement vide ou trop court')
 
-  const encoder = new Mp3Encoder(2, sr, MP3_KBPS)
+  const encoder = new Mp3Encoder(OUT_CHANNELS, OUT_RATE, MP3_KBPS)
   const parts: Uint8Array[] = []
-  const segLen = Math.round(SEGMENT_SECONDS * sr)
+  const segLen = SEGMENT_SECONDS * OUT_RATE
 
   for (let start = 0; start < totalLen; start += segLen) {
-    const len = Math.min(segLen, totalLen - start)
-    const off = new OfflineAudioContext(2, len, sr)
+    const len      = Math.min(segLen, totalLen - start)
+    const startSec = start / OUT_RATE
+    const lenSec   = len / OUT_RATE
+    const off = new OfflineAudioContext(OUT_CHANNELS, len, OUT_RATE)
 
     if (includeVoice) {
-      const buf = off.createBuffer(1, len, sr)
-      const ch = buf.getChannelData(0)
-      const from = start + shift
-      for (let i = 0; i < len; i++) {
+      // Tranche de voix correspondante, à sa fréquence NATIVE : le moteur la rééchantillonne.
+      const from = Math.round(startSec * vr) + shift
+      const n    = Math.ceil(lenSec * vr) + 1
+      const buf  = off.createBuffer(1, n, vr)
+      const ch   = buf.getChannelData(0)
+      for (let i = 0; i < n; i++) {
         const j = from + i
         ch[i] = j >= 0 && j < voiceLen ? voice.samples[j] / 32768 : 0
       }
@@ -127,25 +140,23 @@ export async function renderMixMp3(
       const src = off.createBufferSource()
       src.buffer = t.buffer
       src.connect(g)
-      src.start(0, start / sr, len / sr)
+      src.start(0, startSec, lenSec)
     }
 
     const rendered = await off.startRendering()
-    const left  = toInt16(rendered.getChannelData(0))
-    const right = toInt16(rendered.getChannelData(rendered.numberOfChannels > 1 ? 1 : 0))
-    const mp3 = encoder.encodeBuffer(left, right)
+    const mp3 = encoder.encodeBuffer(toInt16(rendered.getChannelData(0)))
     if (mp3.length > 0) parts.push(mp3)
 
     onProgress?.(Math.min(1, (start + len) / totalLen))
     await nextTick()
   }
 
-  const tail = encoder.flush()
-  if (tail.length > 0) parts.push(tail)
+  const last = encoder.flush()
+  if (last.length > 0) parts.push(last)
 
   return {
     blob: new Blob(parts as BlobPart[], { type: 'audio/mpeg' }),
     mimeType: 'audio/mpeg',
-    durationSec: totalLen / sr,
+    durationSec: totalSec,
   }
 }
