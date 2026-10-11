@@ -37,7 +37,11 @@ export function WaveformRenderer({
   // Force a redraw when the container resizes (e.g. on first layout)
   const [, setResizeTick] = useState(0)
 
-  const progress = duration > 0 ? currentTime / duration : 0
+  // Fraction (0-1) pendant un glissement : le curseur suit le doigt, la lecture n'est déplacée qu'au relâchement
+  const [scrub, setScrub] = useState<number | null>(null)
+  const scrubbing = useRef(false)
+
+  const progress = scrub !== null ? scrub : (duration > 0 ? currentTime / duration : 0)
 
   // ResizeObserver: triggers redraw when canvas display size changes
   useEffect(() => {
@@ -74,19 +78,25 @@ export function WaveformRenderer({
       gap: 1,
     })
 
-    // Loop region overlay
+    // Zone de boucle A–B : bande blanche (couleur neutre, distincte de toutes les voix) + repères A / B
     if (loopRegion) {
-      ctx.fillStyle = `${color}1e`
-      ctx.fillRect(loopRegion.a * w, 0, (loopRegion.b - loopRegion.a) * w, h)
-      // Loop region borders
-      ctx.strokeStyle = `${color}88`
-      ctx.lineWidth = 1
+      const ax = loopRegion.a * w
+      const bx = loopRegion.b * w
+      ctx.fillStyle = '#FFFFFF26'
+      ctx.fillRect(ax, 0, bx - ax, h)
+      ctx.strokeStyle = '#FFFFFFCC'
+      ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.moveTo(loopRegion.a * w, 0)
-      ctx.lineTo(loopRegion.a * w, h)
-      ctx.moveTo(loopRegion.b * w, 0)
-      ctx.lineTo(loopRegion.b * w, h)
+      ctx.moveTo(ax + 1, 0)
+      ctx.lineTo(ax + 1, h)
+      ctx.moveTo(bx - 1, 0)
+      ctx.lineTo(bx - 1, h)
       ctx.stroke()
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textBaseline = 'top'
+      ctx.fillText('A', ax + 4, 2)
+      ctx.fillText('B', Math.max(ax + 14, bx - 12), 2)
     }
 
     // Temporal markers
@@ -125,6 +135,38 @@ export function WaveformRenderer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peaks, progress, loopRegion, markers, duration, color])
 
+  const fractionAt = useCallback((clientX: number): number => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return 0
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+  }, [])
+
+  const canDrag = !!onSeek && !onMarkerPlace
+
+  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!canDrag || duration === 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    scrubbing.current = true
+    setScrub(fractionAt(e.clientX))
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!scrubbing.current) return
+    setScrub(fractionAt(e.clientX))
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!scrubbing.current) return
+    scrubbing.current = false
+    setScrub(null)
+    onSeek?.(fractionAt(e.clientX) * duration)
+  }
+
+  function handlePointerCancel() {
+    scrubbing.current = false
+    setScrub(null)
+  }
+
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
     if (!canvas || duration === 0) return
@@ -133,8 +175,6 @@ export function WaveformRenderer({
     const time  = ratio * duration
     if (onMarkerPlace) {
       onMarkerPlace(time)
-    } else if (onSeek) {
-      onSeek(time)
     }
   }, [duration, onSeek, onMarkerPlace])
 
@@ -152,9 +192,13 @@ export function WaveformRenderer({
   return (
     <canvas
       ref={canvasRef}
-      onClick={handleClick}
+      onClick={onMarkerPlace ? handleClick : undefined}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       className={`w-full rounded block ${onSeek || onMarkerPlace ? 'cursor-pointer' : ''} ${onMarkerPlace ? 'cursor-crosshair' : ''} ${className}`}
-      style={{ height }}
+      style={{ height, touchAction: canDrag ? 'pan-y' : undefined }}
       title={onMarkerPlace ? 'Cliquer pour placer un marqueur' : undefined}
     />
   )

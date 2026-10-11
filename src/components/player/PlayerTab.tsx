@@ -175,12 +175,6 @@ export function PlayerTab() {
     loadAll()
   }, [tracks, engine])
 
-  function handleSeekBarClick(e: React.MouseEvent<HTMLDivElement>) {
-    const rect  = e.currentTarget.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
-    seek(ratio * duration)
-  }
-
   return (
     <div>
       <div className="text-[11px] text-studio-muted mb-4 text-right">{status}</div>
@@ -246,11 +240,13 @@ export function PlayerTab() {
             isPlaying={isPlaying}
             duration={duration}
             loopEnabled={loopEnabled}
+            loopA={loopA}
+            loopB={loopB}
             timeRef={timeRef}
             onTogglePlay={handleTogglePlay}
             onSeekFraction={seekFraction}
             onToggleLoop={() => setLoop(!loopEnabled)}
-            onSeekBarClick={handleSeekBarClick}
+            onSeek={seek}
           />
 
           <SpeedControl speed={speed} onChange={setSpeed} />

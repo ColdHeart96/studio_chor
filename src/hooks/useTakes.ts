@@ -74,6 +74,14 @@ export function useTakes(userId: string | undefined, orgId: string | null | unde
     setTakes(prev => prev.map(t => t.id === take.id ? { ...t, favorite: !t.favorite } : t))
   }
 
+  async function rateTake(take: Take, rating: number): Promise<void> {
+    const value = Math.max(0, Math.min(5, Math.round(rating)))
+    const sb = getSupabaseClient()
+    const { error } = await sb.from('takes').update({ rating: value }).eq('id', take.id)
+    if (error) throw new Error(error.message)
+    setTakes(prev => prev.map(t => t.id === take.id ? { ...t, rating: value } : t))
+  }
+
   async function renameTake(take: Take, newName: string): Promise<void> {
     const sb = getSupabaseClient()
     const { error } = await sb.from('takes').update({ name: newName }).eq('id', take.id)
@@ -81,5 +89,5 @@ export function useTakes(userId: string | undefined, orgId: string | null | unde
     setTakes(prev => prev.map(t => t.id === take.id ? { ...t, name: newName } : t))
   }
 
-  return { takes, loading, reload: load, saveTake, deleteTake, toggleFavorite, renameTake }
+  return { takes, loading, reload: load, saveTake, deleteTake, toggleFavorite, renameTake, rateTake }
 }

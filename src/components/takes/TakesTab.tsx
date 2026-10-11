@@ -11,7 +11,7 @@ export function TakesTab() {
   const { user }       = useAuth()
   const { activeOrg }  = useOrgContext()
   const router         = useRouter()
-  const { takes, loading, deleteTake, toggleFavorite, renameTake } = useTakes(user?.id, activeOrg?.id)
+  const { takes, loading, deleteTake, toggleFavorite, renameTake, rateTake } = useTakes(user?.id, activeOrg?.id)
 
   if (loading) {
     return (
@@ -52,6 +52,7 @@ export function TakesTab() {
               onDelete={deleteTake}
               onToggleFavorite={toggleFavorite}
               onRename={renameTake}
+              onRate={rateTake}
             />
           ))}
         </div>

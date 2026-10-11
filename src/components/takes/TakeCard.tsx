@@ -13,9 +13,10 @@ interface TakeCardProps {
   onDelete: (take: Take) => void
   onToggleFavorite: (take: Take) => void
   onRename: (take: Take, newName: string) => Promise<void>
+  onRate: (take: Take, rating: number) => Promise<void>
 }
 
-export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCardProps) {
+export function TakeCard({ take, onDelete, onToggleFavorite, onRename, onRate }: TakeCardProps) {
   const { user } = useAuth()
 
   const [showPlayer, setShowPlayer]   = useState(false)
@@ -120,6 +121,7 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
     if (e.key === 'Escape') cancelComment()
   }
 
+  const rating = take.rating ?? 0
   const ownCommentIds = new Set(comments.filter(c => c.user_id === user?.id).map(c => c.id))
 
   return (
@@ -162,14 +164,27 @@ export function TakeCard({ take, onDelete, onToggleFavorite, onRename }: TakeCar
             <>
               <div className="text-[13px] text-studio-text truncate">{take.name}</div>
               <div className="text-[10px] text-studio-muted mt-0.5">{take.date} · {take.duration}</div>
+              <div className="flex items-center mt-0.5" role="radiogroup" aria-label="Note de la prise">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    onClick={e => { e.stopPropagation(); void onRate(take, rating === n ? 0 : n).catch(() => {}) }}
+                    className={`text-[17px] leading-none px-0.5 py-1 transition-colors ${n <= rating ? 'text-studio-gold' : 'text-[#2a2418] hover:text-[#555]'}`}
+                    title={rating === n ? 'Retirer la note' : `${n} étoile${n > 1 ? 's' : ''}`}
+                    aria-label={`${n} étoile${n > 1 ? 's' : ''}`}
+                    role="radio"
+                    aria-checked={rating === n}
+                  >★</button>
+                ))}
+              </div>
             </>
           )}
         </div>
 
         {/* Action icons */}
         <button onClick={e => { e.stopPropagation(); onToggleFavorite(take) }}
-          className={`text-sm transition-colors ${take.favorite ? 'text-studio-gold' : 'text-[#2a2418] hover:text-[#444]'}`}
-          title="Favori">★</button>
+          className={`text-sm transition-colors ${take.favorite ? 'text-[#F472B6]' : 'text-[#2a2418] hover:text-[#444]'}`}
+          title={take.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}>♥</button>
         <button onClick={startRename}
           className="text-[12px] text-[#333] hover:text-studio-gold transition-colors"
           title="Renommer">✎</button>

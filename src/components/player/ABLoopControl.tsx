@@ -11,7 +11,11 @@ interface ABLoopControlProps {
 export function ABLoopControl({ loopA, loopB, duration, onChange }: ABLoopControlProps) {
   return (
     <div className="bg-studio-surface border border-studio-border rounded-xl p-4 mb-3">
-      <div className="text-[10px] text-studio-gold uppercase tracking-wider mb-3">Boucle A-B</div>
+      <div className="text-[10px] text-studio-gold uppercase tracking-wider mb-1">🔁 Boucle A-B</div>
+      <div className="text-[11px] text-studio-muted mb-3">
+        La lecture répète sans fin le passage entre <span className="text-white">A</span> et{' '}
+        <span className="text-white">B</span> (zone blanche sur les formes d&apos;onde).
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className="text-[11px] text-[#888] mb-1.5">

@@ -55,6 +55,8 @@ export interface Take {
   date: string | null
   duration: string | null
   favorite: boolean
+  /** Note personnelle, 0 (aucune) à 5 étoiles */
+  rating?: number
   storage_path: string | null
   backing_snapshot: Record<string, unknown>
   review_snapshot: Record<string, unknown>

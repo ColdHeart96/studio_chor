@@ -103,6 +103,8 @@ export function ReviewPanel({
 
   const voiceBufferRef   = useRef<AudioBuffer | null>(null)
   const voiceGainNodeRef = useRef<GainNode | null>(null)
+  // Un GainNode par piste d'accompagnement : cocher/décocher ne fait que changer le gain, sans couper l'écoute
+  const trackGainRefs    = useRef<Partial<Record<VoicePart, GainNode>>>({})
   const sourcesRef       = useRef<AudioBufferSourceNode[]>([])
   const canvasRef        = useRef<HTMLCanvasElement>(null)
 
@@ -132,12 +134,19 @@ export function ReviewPanel({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voice])
 
-  // ── Live voice volume update ──────────────────────────────────────────────
+  // ── Mise à jour en direct des gains (voix et pistes) pendant l'écoute ─────
   useEffect(() => {
-    if (voiceGainNodeRef.current) {
-      voiceGainNodeRef.current.gain.value = hearVoice ? voiceVol : 0
-    }
+    const g = voiceGainNodeRef.current
+    if (g) g.gain.setTargetAtTime(hearVoice ? voiceVol : 0, g.context.currentTime, 0.015)
   }, [voiceVol, hearVoice])
+
+  useEffect(() => {
+    for (const v of VOICE_PARTS) {
+      const g = trackGainRefs.current[v]
+      if (g) g.gain.setTargetAtTime(trackOn[v] ? (trackVolumes[v] ?? 0.8) : 0, g.context.currentTime, 0.015)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackOn])
 
   // ── Réglage de synchro : on relance l'écoute depuis le début pour entendre l'effet ──
   useEffect(() => {
@@ -182,6 +191,7 @@ export function ReviewPanel({
     }
     sourcesRef.current = []
     voiceGainNodeRef.current = null
+    trackGainRefs.current = {}
   }
 
   /**
@@ -204,40 +214,39 @@ export function ReviewPanel({
     const offsetSec = offsetRef.current / 1000
     const outLen    = Math.max(0.05, voiceBuf.duration - offsetSec)
 
+    // Voix et pistes sont toujours lancées ; une case décochée met simplement le gain à 0,
+    // ce qui permet de la recocher en cours d'écoute sans interruption.
+
     // ── Voice ─────────────────────────────────────────────────────────────
-    if (hearVoice) {
-      const vGain = aac.createGain()
-      vGain.gain.value = voiceVol
-      vGain.connect(aac.destination)
-      voiceGainNodeRef.current = vGain
+    const vGain = aac.createGain()
+    vGain.gain.value = hearVoice ? voiceVol : 0
+    vGain.connect(aac.destination)
+    voiceGainNodeRef.current = vGain
 
-      const vSrc = aac.createBufferSource()
-      vSrc.buffer = voiceBuf
-      vSrc.connect(vGain)
-      if (offsetSec >= 0) vSrc.start(when, Math.min(offsetSec, Math.max(0, voiceBuf.duration - 0.01)))
-      else                vSrc.start(when - offsetSec, 0)
-      vSrc.onended = () => { stopReviewPlay() }
-      newSources.push(vSrc)
-    }
+    const vSrc = aac.createBufferSource()
+    vSrc.buffer = voiceBuf
+    vSrc.connect(vGain)
+    if (offsetSec >= 0) vSrc.start(when, Math.min(offsetSec, Math.max(0, voiceBuf.duration - 0.01)))
+    else                vSrc.start(when - offsetSec, 0)
+    vSrc.onended = () => { stopReviewPlay() }
+    newSources.push(vSrc)
 
-    // ── Selected backing tracks ────────────────────────────────────────────
+    // ── Backing tracks ─────────────────────────────────────────────────────
     for (const v of VOICE_PARTS) {
-      if (!trackOn[v]) continue
+      if (!recordedWithVoices.has(v)) continue
       const buf = engine.getBuffer(v)
       if (!buf) continue
       const g = aac.createGain()
-      g.gain.value = trackVolumes[v] ?? 0.8
+      g.gain.value = trackOn[v] ? (trackVolumes[v] ?? 0.8) : 0
       g.connect(aac.destination)
+      trackGainRefs.current[v] = g
       const s = aac.createBufferSource()
       s.buffer = buf
       s.connect(g)
       s.start(when, 0, outLen)
-      // Sans voix, c'est la piste qui marque la fin de l'écoute
-      if (!hearVoice && newSources.length === 0) s.onended = () => { stopReviewPlay() }
       newSources.push(s)
     }
 
-    if (newSources.length === 0) return
     sourcesRef.current = newSources
     setIsPlaying(true)
   }
@@ -256,13 +265,12 @@ export function ReviewPanel({
     }
   }
 
+  // Pas d'arrêt de l'écoute : les effets ci-dessus ajustent les gains en direct
   function handleToggleVoice() {
-    stopReviewPlay()
     setHearVoice(v => !v)
   }
 
   function handleToggleTrack(v: VoicePart) {
-    stopReviewPlay()
     setTrackOn(prev => ({ ...prev, [v]: !prev[v] }))
   }
 
