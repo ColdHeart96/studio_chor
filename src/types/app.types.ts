@@ -4,24 +4,33 @@ export type UserRole = 'admin' | 'choriste'
 export type VoicePart = 'soprano' | 'alto' | 'tenor' | 'basse'
 export type RecorderState = 'idle' | 'countdown' | 'recording' | 'reviewing'
 
+/** Rôle d'un utilisateur DANS une organisation (org_members.role). */
+export type OrgRole = 'admin' | 'member'
+
 export interface Profile {
   id: string
   email: string
+  /** Rôle plateforme : 'admin' = autorisé à créer des organisations. Ne donne aucun droit sur une org. */
   role: UserRole
+  display_name?: string | null
   created_at: string
 }
 
 export interface Organization {
   id: string
   name: string
+  /** Propriétaire de l'organisation */
   admin_id: string
   invite_code: string
   created_at: string
+  /** Rôle de l'utilisateur courant dans cette org (renseigné par useOrg) */
+  my_role?: OrgRole
 }
 
 export interface OrgMember {
   user_id: string
   org_id: string
+  role: OrgRole
   joined_at: string
   profiles?: Profile
 }

@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '@/lib/supabase/client'
-import type { Organization } from '@/types/app.types'
+import type { Organization, OrgRole } from '@/types/app.types'
 
 export async function joinOrgByCode(code: string): Promise<string> {
   const sb = getSupabaseClient()
@@ -56,6 +56,16 @@ export async function regenerateInviteCode(orgId: string): Promise<string> {
 export async function deleteOrg(orgId: string): Promise<void> {
   const sb = getSupabaseClient()
   const { error } = await sb.from('organizations').delete().eq('id', orgId)
+  if (error) throw new Error(error.message)
+}
+
+export async function setMemberRole(userId: string, orgId: string, role: OrgRole): Promise<void> {
+  const sb = getSupabaseClient()
+  const { error } = await sb
+    .from('org_members')
+    .update({ role })
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
   if (error) throw new Error(error.message)
 }
 

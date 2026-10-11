@@ -10,7 +10,9 @@ import { MAX_ORGS_PER_ADMIN } from '@/lib/constants'
 
 export function OrgManager() {
   const { user } = useAuth()
-  const { orgs, reload, setActiveOrg } = useOrgContext()
+  const { orgs: allOrgs, reload, setActiveOrg } = useOrgContext()
+  // Seul le propriétaire gère le code d'invitation et la suppression
+  const orgs = allOrgs.filter(o => o.admin_id === user?.id)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName]       = useState('')
   const [error, setError]           = useState('')
