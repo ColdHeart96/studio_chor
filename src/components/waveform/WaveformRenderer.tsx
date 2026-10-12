@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useEffect, useCallback, useState } from 'react'
 import { drawWaveform } from '@/lib/audio/waveformUtils'
+import { useTheme, themeColor } from '@/lib/theme'
 
 export interface WaveformMarker {
   id: string | number
@@ -29,15 +30,21 @@ export function WaveformRenderer({
   onSeek,
   onMarkerPlace,
   loopRegion,
-  color = '#E8C547',
+  color: colorProp,
   className = '',
   height = 44,
 }: WaveformRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { theme } = useTheme()
+  const color = colorProp ?? themeColor('gold')
   // Force a redraw when the container resizes (e.g. on first layout)
   const [, setResizeTick] = useState(0)
 
-  const progress = duration > 0 ? currentTime / duration : 0
+  // Fraction (0-1) pendant un glissement : le curseur suit le doigt, la lecture n'est déplacée qu'au relâchement
+  const [scrub, setScrub] = useState<number | null>(null)
+  const scrubbing = useRef(false)
+
+  const progress = scrub !== null ? scrub : (duration > 0 ? currentTime / duration : 0)
 
   // ResizeObserver: triggers redraw when canvas display size changes
   useEffect(() => {
@@ -67,26 +74,32 @@ export function WaveformRenderer({
     ctx.scale(dpr, dpr)
 
     drawWaveform(canvas, peaks, {
-      color:         '#2a2418',
+      color:         themeColor('border2'),
       progressColor: color,
       progress,
       barWidth: 2,
       gap: 1,
     })
 
-    // Loop region overlay
+    // Zone de boucle A–B : bande blanche (couleur neutre, distincte de toutes les voix) + repères A / B
     if (loopRegion) {
-      ctx.fillStyle = `${color}1e`
-      ctx.fillRect(loopRegion.a * w, 0, (loopRegion.b - loopRegion.a) * w, h)
-      // Loop region borders
-      ctx.strokeStyle = `${color}88`
-      ctx.lineWidth = 1
+      const ax = loopRegion.a * w
+      const bx = loopRegion.b * w
+      ctx.fillStyle = themeColor('overlay', 0.15)
+      ctx.fillRect(ax, 0, bx - ax, h)
+      ctx.strokeStyle = themeColor('overlay', 0.8)
+      ctx.lineWidth = 2
       ctx.beginPath()
-      ctx.moveTo(loopRegion.a * w, 0)
-      ctx.lineTo(loopRegion.a * w, h)
-      ctx.moveTo(loopRegion.b * w, 0)
-      ctx.lineTo(loopRegion.b * w, h)
+      ctx.moveTo(ax + 1, 0)
+      ctx.lineTo(ax + 1, h)
+      ctx.moveTo(bx - 1, 0)
+      ctx.lineTo(bx - 1, h)
       ctx.stroke()
+      ctx.fillStyle = themeColor('text')
+      ctx.font = 'bold 10px sans-serif'
+      ctx.textBaseline = 'top'
+      ctx.fillText('A', ax + 4, 2)
+      ctx.fillText('B', Math.max(ax + 14, bx - 12), 2)
     }
 
     // Temporal markers
@@ -94,14 +107,14 @@ export function WaveformRenderer({
       for (const m of markers) {
         if (m.time_position === null || m.time_position === undefined) continue
         const x = (m.time_position / duration) * w
-        ctx.strokeStyle = '#FF9944'
+        ctx.strokeStyle = themeColor('orange')
         ctx.lineWidth = 1.5
         ctx.beginPath()
         ctx.moveTo(x, 0)
         ctx.lineTo(x, h)
         ctx.stroke()
         // Diamond head
-        ctx.fillStyle = '#FF9944'
+        ctx.fillStyle = themeColor('orange')
         ctx.beginPath()
         ctx.moveTo(x, 0)
         ctx.lineTo(x + 5, 6)
@@ -115,7 +128,7 @@ export function WaveformRenderer({
     // Playhead
     if (progress > 0 && progress < 1) {
       const px = progress * w
-      ctx.strokeStyle = '#ffffff44'
+      ctx.strokeStyle = themeColor('text', 0.3)
       ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(px, 0)
@@ -123,7 +136,39 @@ export function WaveformRenderer({
       ctx.stroke()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [peaks, progress, loopRegion, markers, duration, color])
+  }, [peaks, progress, loopRegion, markers, duration, color, theme])
+
+  const fractionAt = useCallback((clientX: number): number => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return 0
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+  }, [])
+
+  const canDrag = !!onSeek && !onMarkerPlace
+
+  function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!canDrag || duration === 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    scrubbing.current = true
+    setScrub(fractionAt(e.clientX))
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!scrubbing.current) return
+    setScrub(fractionAt(e.clientX))
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!scrubbing.current) return
+    scrubbing.current = false
+    setScrub(null)
+    onSeek?.(fractionAt(e.clientX) * duration)
+  }
+
+  function handlePointerCancel() {
+    scrubbing.current = false
+    setScrub(null)
+  }
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current
@@ -133,8 +178,6 @@ export function WaveformRenderer({
     const time  = ratio * duration
     if (onMarkerPlace) {
       onMarkerPlace(time)
-    } else if (onSeek) {
-      onSeek(time)
     }
   }, [duration, onSeek, onMarkerPlace])
 
@@ -152,9 +195,13 @@ export function WaveformRenderer({
   return (
     <canvas
       ref={canvasRef}
-      onClick={handleClick}
+      onClick={onMarkerPlace ? handleClick : undefined}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       className={`w-full rounded block ${onSeek || onMarkerPlace ? 'cursor-pointer' : ''} ${onMarkerPlace ? 'cursor-crosshair' : ''} ${className}`}
-      style={{ height }}
+      style={{ height, touchAction: canDrag ? 'pan-y' : undefined }}
       title={onMarkerPlace ? 'Cliquer pour placer un marqueur' : undefined}
     />
   )

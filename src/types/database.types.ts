@@ -164,6 +164,7 @@ export type Database = {
           id: number
           name: string
           org_id: string | null
+          rating: number
           review_snapshot: Json | null
           storage_path: string | null
           sync_info: Json
@@ -180,6 +181,7 @@ export type Database = {
           id?: never
           name: string
           org_id?: string | null
+          rating?: number
           review_snapshot?: Json | null
           storage_path?: string | null
           sync_info?: Json
@@ -196,6 +198,7 @@ export type Database = {
           id?: never
           name?: string
           org_id?: string | null
+          rating?: number
           review_snapshot?: Json | null
           storage_path?: string | null
           sync_info?: Json

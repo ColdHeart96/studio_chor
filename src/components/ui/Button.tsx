@@ -19,9 +19,9 @@ export function Button({
   const base = 'inline-flex items-center justify-center gap-2 font-serif tracking-wide rounded-xl transition-all disabled:opacity-60 cursor-pointer'
 
   const variants = {
-    gold:    'bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-bg font-semibold shadow-[0_0_24px_#E8C54744] hover:opacity-90',
-    red:     'bg-gradient-to-br from-studio-red-dark to-[#881111] text-white shadow-[0_0_24px_#CC222244] hover:opacity-90',
-    green:   'bg-[#1a4a1a] border border-[#2a4a2a] text-studio-green hover:opacity-90',
+    gold:    'bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-ink font-semibold shadow-[0_0_24px_rgb(var(--gold)/0.27)] hover:opacity-90',
+    red:     'bg-gradient-to-br from-studio-red-dark to-[#881111] text-white shadow-[0_0_24px_rgb(var(--red-dark)/0.27)] hover:opacity-90',
+    green:   'bg-studio-green-soft border border-studio-green-line text-studio-green hover:opacity-90',
     ghost:   'bg-transparent border border-studio-border2 text-studio-muted hover:border-studio-border hover:text-studio-text',
     outline: 'bg-transparent border border-studio-border text-studio-muted hover:border-studio-border2 hover:text-studio-text',
   }

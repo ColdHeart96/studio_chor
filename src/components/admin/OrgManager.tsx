@@ -72,7 +72,7 @@ export function OrgManager() {
       </div>
 
       {orgs.length === 0 && (
-        <div className="text-center py-8 text-[#444]">
+        <div className="text-center py-8 text-studio-faint">
           <div className="text-2xl mb-2">🎼</div>
           <div className="text-sm">Aucune organisation</div>
         </div>

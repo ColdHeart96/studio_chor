@@ -289,8 +289,8 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
             onClick={() => chooseRoute(r)}
             className="px-2 py-2.5 rounded-xl border text-[11px] transition-all"
             style={route === r
-              ? { borderColor: '#E8C54755', background: '#E8C54712', color: '#E8C547' }
-              : { borderColor: '#1e1c18', background: 'transparent', color: '#777' }
+              ? { borderColor: 'rgb(var(--gold) / 0.33)', background: 'rgb(var(--gold) / 0.07)', color: 'rgb(var(--gold))' }
+              : { borderColor: 'rgb(var(--border))', background: 'transparent', color: 'rgb(var(--soft))' }
             }
           >
             <div className="text-base mb-0.5">{ROUTE_ICONS[r]}</div>
@@ -300,7 +300,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
       </div>
 
       {route === 'speaker' && (
-        <div className="text-[11px] mb-2 px-3 py-2 rounded-lg" style={{ background: '#FF994412', border: '1px solid #FF994433', color: '#FF9944' }}>
+        <div className="text-[11px] mb-2 px-3 py-2 rounded-lg" style={{ background: 'rgb(var(--orange) / 0.07)', border: '1px solid rgb(var(--orange) / 0.2)', color: 'rgb(var(--orange))' }}>
           Avec le haut-parleur, le micro entend aussi les pistes : l&apos;enregistrement contiendra un peu de musique.
           Pour un meilleur résultat, utilisez des écouteurs.
         </div>
@@ -308,12 +308,12 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
 
       {route === 'bluetooth' && allMics.length > 0 && (
         singMic && !isHeadsetMic(singMic.label) ? (
-          <div className="text-[11px] mb-2 px-3 py-2 rounded-lg" style={{ background: '#4ADE8012', border: '1px solid #4ADE8033', color: '#4ADE80' }}>
+          <div className="text-[11px] mb-2 px-3 py-2 rounded-lg" style={{ background: 'rgb(var(--green) / 0.07)', border: '1px solid rgb(var(--green) / 0.2)', color: 'rgb(var(--green))' }}>
             🎤 Votre voix sera captée par <b>{singMic.label}</b> : chantez à 30–50 cm du téléphone.
             Le casque ne sert que pour écouter (meilleure qualité).
           </div>
         ) : (
-          <div className="text-[11px] mb-2 px-3 py-2 rounded-lg" style={{ background: '#FF994412', border: '1px solid #FF994433', color: '#FF9944' }}>
+          <div className="text-[11px] mb-2 px-3 py-2 rounded-lg" style={{ background: 'rgb(var(--orange) / 0.07)', border: '1px solid rgb(var(--orange) / 0.2)', color: 'rgb(var(--orange))' }}>
             ⚠ Le téléphone n&apos;a pas indiqué son micro intégré : votre voix sera captée par le micro du casque,
             souvent faible et irrégulière (traitement du casque). Micros détectés :{' '}
             {allMics.map(m => `« ${m.label} »`).join(', ')}. Si l&apos;un d&apos;eux est celui du téléphone,
@@ -328,7 +328,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
       >
         <span>
           Latence de l&apos;appareil : <span className="tabular-nums text-studio-gold">{estimate.ms} ms</span>
-          {' '}<span className="text-[#555]">({SOURCE_LABELS[estimate.source]})</span>
+          {' '}<span className="text-studio-muted">({SOURCE_LABELS[estimate.source]})</span>
         </span>
         <span>{open ? '▲' : '▼'}</span>
       </button>
@@ -374,26 +374,26 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
 
           {testing ? (
             <div className="mb-4">
-              <div className="h-3 rounded bg-[#1a1814] overflow-hidden mb-1.5">
+              <div className="h-3 rounded bg-studio-raised overflow-hidden mb-1.5">
                 <div
                   className="h-full transition-[width] duration-100"
                   style={{
                     width: `${Math.max(2, Math.min(100, ((levelDb + 80) / 80) * 100))}%`,
-                    background: levelDb > -40 ? '#4ADE80' : levelDb > -55 ? '#E8C547' : '#FF6644',
+                    background: levelDb > -40 ? 'rgb(var(--green))' : levelDb > -55 ? 'rgb(var(--gold))' : 'rgb(var(--coral))',
                   }}
                 />
               </div>
               <div className="flex justify-between text-[11px] mb-2">
-                <span style={{ color: levelDb > -40 ? '#4ADE80' : levelDb > -55 ? '#E8C547' : '#FF6644' }}>
+                <span style={{ color: levelDb > -40 ? 'rgb(var(--green))' : levelDb > -55 ? 'rgb(var(--gold))' : 'rgb(var(--coral))' }}>
                   {!testReady
                     ? 'Préparation du micro… patientez'
                     : levelDb > -40 ? 'Parfait : le micro entend bien le casque'
                     : levelDb > -55 ? 'Faible : rapprochez l\'oreillette ou montez le volume'
                     : 'Rien n\'est entendu : changez de position'}
                 </span>
-                <span className="tabular-nums text-[#555]">{levelDb} dB</span>
+                <span className="tabular-nums text-studio-muted">{levelDb} dB</span>
               </div>
-              {testMic && <div className="text-[10px] text-[#555] mb-2">Micro écouté : {testMic}</div>}
+              {testMic && <div className="text-[10px] text-studio-muted mb-2">Micro écouté : {testMic}</div>}
               <button
                 onClick={stopTest}
                 className="w-full px-3 py-2 rounded-xl text-[12px] border border-studio-border2 text-studio-muted hover:text-studio-text transition-colors"
@@ -406,7 +406,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
               onClick={startTest}
               disabled={busy}
               className="w-full px-3 py-2.5 rounded-xl text-[12px] transition-all disabled:opacity-50 mb-4"
-              style={{ background: '#47A8E822', border: '1px solid #47A8E855', color: '#47A8E8' }}
+              style={{ background: 'rgb(var(--blue) / 0.13)', border: '1px solid rgb(var(--blue) / 0.33)', color: 'rgb(var(--blue))' }}
             >
               ◔ Tester la position (niveau en direct)
             </button>
@@ -423,7 +423,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
             onClick={calibrate}
             disabled={busy || testing}
             className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-[12px] transition-all disabled:opacity-50"
-            style={{ background: '#E8C54722', border: '1px solid #E8C54755', color: '#E8C547' }}
+            style={{ background: 'rgb(var(--gold) / 0.13)', border: '1px solid rgb(var(--gold) / 0.33)', color: 'rgb(var(--gold))' }}
           >
             {busy
               ? <><Spinner size="sm" /> {phase === 'warmup' ? 'Préparation du micro…' : 'Mesure en cours… ne bougez pas'}</>
@@ -441,7 +441,7 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
           )}
 
           {message && (
-            <div className="text-[11px] mt-3" style={{ color: message.ok ? '#4ADE80' : '#FF9944' }}>
+            <div className="text-[11px] mt-3" style={{ color: message.ok ? 'rgb(var(--green))' : 'rgb(var(--orange))' }}>
               {message.text}
             </div>
           )}
@@ -453,12 +453,12 @@ export function LatencyPanel({ route, onRouteChange }: LatencyPanelProps) {
             </RefreshHint>
           )}
           {micInfo && (
-            <div className="text-[10px] mt-2 text-[#555] break-words whitespace-pre-wrap">{micInfo}</div>
+            <div className="text-[10px] mt-2 text-studio-muted break-words whitespace-pre-wrap">{micInfo}</div>
           )}
 
-          <div className="text-[10px] text-[#555] mt-3 leading-relaxed">
+          <div className="text-[10px] text-studio-muted mt-3 leading-relaxed">
             Voix qui « pompe » (le volume monte et descend) ? Sur iPhone : Centre de contrôle → Mode du micro →
-            <span className="text-[#777]"> Standard</span> (pas « Isolation vocale »). Sur Bluetooth, éteignez la
+            <span className="text-studio-soft"> Standard</span> (pas « Isolation vocale »). Sur Bluetooth, éteignez la
             réduction de bruit du casque si possible.
           </div>
         </div>

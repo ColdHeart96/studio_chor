@@ -60,7 +60,7 @@ function JoinPageContent() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full py-3.5 rounded-xl font-serif text-sm bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-bg font-semibold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl font-serif text-sm bg-gradient-to-br from-studio-gold to-studio-gold-dim text-studio-ink font-semibold transition-all hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {busy && <span className="inline-block w-3 h-3 border-2 border-studio-bg/30 border-t-studio-bg rounded-full animate-spin-sm" />}
               Rejoindre

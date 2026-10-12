@@ -10,10 +10,19 @@ export const VOICE_LABELS: Record<VoicePart, string> = {
 }
 
 export const VOICE_COLORS: Record<VoicePart, string> = {
-  soprano: '#E8C547',
+  // Rose : distinct de l'or de l'interface (#E8C547) et de l'orange de l'alto
+  soprano: '#F472B6',
   alto:    '#FF9944',
   tenor:   '#4ADE80',
   basse:   '#6688FF',
+}
+
+// Variantes assombries pour le thème clair (textes lisibles sur fond blanc)
+export const VOICE_COLORS_LIGHT: Record<VoicePart, string> = {
+  soprano: '#D6409F',
+  alto:    '#D9730D',
+  tenor:   '#1F9D55',
+  basse:   '#3B5BDB',
 }
 
 export const MAX_ORGS_PER_ADMIN = 3

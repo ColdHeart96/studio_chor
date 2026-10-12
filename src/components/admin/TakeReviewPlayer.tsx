@@ -83,7 +83,7 @@ export function TakeReviewPlayer({ take, choriste, onClose }: TakeReviewPlayerPr
       {/* Add global comment */}
       <button
         onClick={handleAddGlobal}
-        className="mt-3 w-full py-2 bg-transparent border border-dashed border-studio-border2 rounded-lg text-[11px] text-studio-muted hover:border-[#E8C54755] hover:text-studio-gold transition-all font-serif"
+        className="mt-3 w-full py-2 bg-transparent border border-dashed border-studio-border2 rounded-lg text-[11px] text-studio-muted hover:border-[rgb(var(--gold)/0.33)] hover:text-studio-gold transition-all font-serif"
       >
         + Ajouter un commentaire global
       </button>

@@ -47,9 +47,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {children}
             </div>
           </OrgGate>
-          <footer className="px-6 py-3 border-t border-[#1a1814] flex justify-between">
-            <span className="text-[10px] text-[#2a2418]">Web Audio API · Enregistrement sécurisé</span>
-            <span className="text-[10px] text-[#2a2418]">Chœur Studio v2.0</span>
+          <footer className="px-6 py-3 border-t border-studio-raised flex justify-between">
+            <span className="text-[10px] text-studio-border2">Web Audio API · Enregistrement sécurisé</span>
+            <span className="text-[10px] text-studio-border2">Chœur Studio v2.0</span>
           </footer>
         </div>
       </div>

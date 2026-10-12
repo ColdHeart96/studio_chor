@@ -12,7 +12,7 @@ interface CommentThreadProps {
 export function CommentThread({ comments, onDelete, isAdmin, showDeleteForIds }: CommentThreadProps) {
   if (comments.length === 0) {
     return (
-      <div className="text-[11px] text-[#333] py-2">Aucun commentaire</div>
+      <div className="text-[11px] text-studio-muted2 py-2">Aucun commentaire</div>
     )
   }
 
@@ -28,7 +28,7 @@ export function CommentThread({ comments, onDelete, isAdmin, showDeleteForIds }:
             {/* Time badge */}
             {comment.time_position !== null ? (
               <span className="text-[9px] px-1.5 py-0.5 rounded tabular-nums flex-shrink-0 mt-0.5"
-                style={{ background: '#FF994418', border: '1px solid #FF994433', color: '#FF9944' }}>
+                style={{ background: 'rgb(var(--orange) / 0.09)', border: '1px solid rgb(var(--orange) / 0.2)', color: 'rgb(var(--orange))' }}>
                 ◈ {formatTime(comment.time_position)}
               </span>
             ) : (

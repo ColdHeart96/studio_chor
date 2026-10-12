@@ -1,10 +1,10 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useOrgContext } from '@/contexts/OrgContext'
 import { useAudioEngine } from '@/hooks/useAudioEngine'
 import { useTracks } from '@/hooks/useTracks'
 import { extractPeaks } from '@/lib/audio/waveformUtils'
-import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
+import { VOICE_PARTS, VOICE_LABELS } from '@/lib/constants'
 import { SectionLabel } from '@/components/ui/Card'
 import { Spinner } from '@/components/ui/Spinner'
 import { RefreshHint } from '@/components/ui/RefreshHint'
@@ -95,6 +95,29 @@ export function PlayerTab() {
     })
   }
 
+  // Forme d'onde unique : moyenne (pondérée par le volume) des voix audibles
+  const combinedPeaks = useMemo(() => {
+    const anySolo = VOICE_PARTS.some(v => mixState[v].solo)
+    const audible = VOICE_PARTS.filter(v => peaksMap[v] && !mixState[v].muted && (!anySolo || mixState[v].solo))
+    const sources = audible.length > 0 ? audible : VOICE_PARTS.filter(v => peaksMap[v])
+    if (sources.length === 0) return []
+    const n = Math.max(...sources.map(v => peaksMap[v]!.length))
+    const out = new Array<number>(n).fill(0)
+    for (const v of sources) {
+      const p = peaksMap[v]!
+      const gain = audible.length > 0 ? Math.min(1, mixState[v].volume) : 0.3
+      for (let i = 0; i < n; i++) {
+        out[i] += (p[Math.min(p.length - 1, Math.floor(i * p.length / n))] ?? 0) * gain / sources.length
+      }
+    }
+    // Remise à l'échelle : la moyenne de plusieurs voix reste lisible (sauf si tout est coupé)
+    if (audible.length > 0) {
+      const top = Math.max(...out)
+      if (top > 0) for (let i = 0; i < n; i++) out[i] /= top
+    }
+    return out
+  }, [peaksMap, mixState])
+
   // ── Markers ───────────────────────────────────────────────────────────────
   const [markers, setMarkers]           = useState<Marker[]>([])
   const [editingId, setEditingId]       = useState<string | null>(null)
@@ -175,12 +198,6 @@ export function PlayerTab() {
     loadAll()
   }, [tracks, engine])
 
-  function handleSeekBarClick(e: React.MouseEvent<HTMLDivElement>) {
-    const rect  = e.currentTarget.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
-    seek(ratio * duration)
-  }
-
   return (
     <div>
       <div className="text-[11px] text-studio-muted mb-4 text-right">{status}</div>
@@ -209,7 +226,7 @@ export function PlayerTab() {
       {!hasLoaded && !loading && !loadingTrack && (
         <div className="text-center py-12 text-studio-muted">
           <div className="text-4xl mb-3">🎼</div>
-          <div className="text-sm text-[#555]">
+          <div className="text-sm text-studio-muted">
             {activeOrg ? 'Aucune piste disponible dans cette organisation' : 'Sélectionnez une organisation'}
           </div>
         </div>
@@ -217,40 +234,30 @@ export function PlayerTab() {
 
       {hasLoaded && (
         <>
-          <SectionLabel>Aperçu des pistes</SectionLabel>
+          <SectionLabel>Lecture</SectionLabel>
 
-          {/* Per-voice waveforms with markers */}
-          {VOICE_PARTS.filter(v => peaksMap[v]).map(voice => (
-            <div key={voice} className="mb-2">
-              <div className="flex items-center gap-2 mb-1">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ background: VOICE_COLORS[voice], boxShadow: `0 0 4px ${VOICE_COLORS[voice]}66` }}
-                />
-                <span className="text-[11px] text-studio-muted">{VOICE_LABELS[voice]}</span>
-              </div>
-              <WaveformRenderer
-                peaks={peaksMap[voice]!}
-                duration={duration}
-                currentTime={currentTime}
-                markers={waveformMarkers}
-                color={VOICE_COLORS[voice]}
-                onSeek={seek}
-                loopRegion={loopEnabled ? { a: loopA, b: loopB } : undefined}
-                height={32}
-              />
-            </div>
-          ))}
+          {/* Une seule piste de lecture : l'ensemble des voix audibles, avec marqueurs et zone de boucle */}
+          <WaveformRenderer
+            peaks={combinedPeaks}
+            duration={duration}
+            currentTime={currentTime}
+            markers={waveformMarkers}
+            onSeek={seek}
+            loopRegion={loopEnabled ? { a: loopA, b: loopB } : undefined}
+            height={64}
+          />
 
           <TransportControls
             isPlaying={isPlaying}
             duration={duration}
             loopEnabled={loopEnabled}
+            loopA={loopA}
+            loopB={loopB}
             timeRef={timeRef}
             onTogglePlay={handleTogglePlay}
             onSeekFraction={seekFraction}
             onToggleLoop={() => setLoop(!loopEnabled)}
-            onSeekBarClick={handleSeekBarClick}
+            onSeek={seek}
           />
 
           <SpeedControl speed={speed} onChange={setSpeed} />
@@ -269,7 +276,7 @@ export function PlayerTab() {
             <SectionLabel className="m-0">Marqueurs</SectionLabel>
             <button
               onClick={addMarker}
-              className="px-3 py-1 bg-[#E8C54718] border border-[#E8C54744] rounded text-studio-gold text-[11px] font-serif cursor-pointer"
+              className="px-3 py-1 bg-[rgb(var(--gold)/0.09)] border border-[rgb(var(--gold)/0.27)] rounded text-studio-gold text-[11px] font-serif cursor-pointer"
             >
               + Marquer ici
             </button>
@@ -287,7 +294,7 @@ export function PlayerTab() {
                       onChange={e => setEditingLabel(e.target.value)}
                       onBlur={() => commitLabel(m.id)}
                       onKeyDown={e => { if (e.key === 'Enter') commitLabel(m.id); if (e.key === 'Escape') setEditingId(null) }}
-                      className="w-20 bg-[#1a1810] border border-studio-gold rounded px-1.5 py-0.5 text-studio-gold text-[12px] font-serif outline-none"
+                      className="w-20 bg-studio-raised border border-studio-gold rounded px-1.5 py-0.5 text-studio-gold text-[12px] font-serif outline-none"
                       maxLength={20}
                     />
                   ) : (
@@ -304,14 +311,14 @@ export function PlayerTab() {
                   </span>
                   <button
                     onClick={() => seek(m.time)}
-                    className="text-[10px] text-[#444] hover:text-[#888] border border-studio-border px-1.5 py-0.5 rounded font-serif"
+                    className="text-[10px] text-studio-faint hover:text-studio-strong border border-studio-border px-1.5 py-0.5 rounded font-serif"
                     title="Aller à ce marqueur"
                   >
                     ▶
                   </button>
                   <button
                     onClick={() => setMarkers(prev => prev.filter(x => x.id !== m.id))}
-                    className="text-[10px] text-[#444] hover:text-studio-red"
+                    className="text-[10px] text-studio-faint hover:text-studio-red"
                     title="Supprimer"
                   >
                     ✕
@@ -325,6 +332,11 @@ export function PlayerTab() {
           <SectionLabel>Mixage des voix</SectionLabel>
           <VoiceMixer
             tracks={loadedTracks}
+            peaks={peaksMap}
+            duration={duration}
+            currentTime={currentTime}
+            onSeek={seek}
+            loopRegion={loopEnabled ? { a: loopA, b: loopB } : undefined}
             mixState={mixState}
             onVolumeChange={handleVolumeChange}
             onMuteToggle={handleMuteToggle}

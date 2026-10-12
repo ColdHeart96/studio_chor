@@ -15,7 +15,8 @@ import {
 import { LatencyPanel } from '@/components/recorder/LatencyPanel'
 import { RefreshHint } from '@/components/ui/RefreshHint'
 import type { ReviewSaveState } from '@/components/recorder/ReviewPanel'
-import { VOICE_PARTS, VOICE_LABELS, VOICE_COLORS } from '@/lib/constants'
+import { VOICE_PARTS, VOICE_LABELS } from '@/lib/constants'
+import { useTheme } from '@/lib/theme'
 import { Card, SectionLabel } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -25,6 +26,7 @@ import { ReviewPanel } from '@/components/recorder/ReviewPanel'
 import type { VoicePart, Track } from '@/types/app.types'
 
 export function RecordTab() {
+  const { voiceColors: VOICE_COLORS } = useTheme()
   const { user }      = useAuth()
   const { activeOrg } = useOrgContext()
   const { saveTake }  = useTakes(user?.id, activeOrg?.id)
@@ -233,7 +235,7 @@ export function RecordTab() {
 
         <Card className="mb-4">
           <div className="flex items-center gap-3 mb-2.5">
-            <span className="text-xs text-[#888]">Micro</span>
+            <span className="text-xs text-studio-strong">Micro</span>
             <VUMeter stream={stream} />
           </div>
           <div className="h-1 bg-studio-border rounded">
@@ -241,7 +243,7 @@ export function RecordTab() {
               className="h-full rounded"
               style={{
                 width: `${(elapsed / 600) * 100}%`,
-                background: 'linear-gradient(90deg, #CC2222, #FF6644)',
+                background: 'linear-gradient(90deg, rgb(var(--red-dark)), rgb(var(--coral)))',
                 transition: 'width 1s linear',
               }}
             />
@@ -316,7 +318,7 @@ export function RecordTab() {
           <Spinner size="sm" /> Chargement des pistes…
         </div>
       ) : tracks.length === 0 ? (
-        <div className="text-[12px] text-[#444] mb-5">
+        <div className="text-[12px] text-studio-faint mb-5">
           {activeOrg ? 'Aucune piste disponible dans cette organisation.' : 'Sélectionnez une organisation.'}
         </div>
       ) : (
@@ -331,7 +333,7 @@ export function RecordTab() {
             </button>
             <button
               onClick={() => setSelectedVoices(new Set())}
-              className="text-[10px] px-2 py-1 rounded border border-studio-border text-studio-muted hover:text-[#888] transition-colors"
+              className="text-[10px] px-2 py-1 rounded border border-studio-border text-studio-muted hover:text-studio-strong transition-colors"
             >
               Aucune
             </button>
@@ -348,7 +350,7 @@ export function RecordTab() {
               return (
                 <div key={v} className="rounded-xl border transition-all" style={checked
                   ? { borderColor: `${color}55`, background: `${color}0a` }
-                  : { borderColor: '#1e1c18', opacity: 0.6 }
+                  : { borderColor: 'rgb(var(--border))', opacity: 0.6 }
                 }>
                   {/* Track row */}
                   <button
@@ -357,12 +359,12 @@ export function RecordTab() {
                   >
                     <div
                       className="w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                      style={checked ? { borderColor: color, background: color } : { borderColor: '#444' }}
+                      style={checked ? { borderColor: color, background: color } : { borderColor: 'rgb(var(--faint))' }}
                     >
-                      {checked && <span className="text-[9px] text-studio-bg font-bold leading-none">✓</span>}
+                      {checked && <span className="text-[9px] text-studio-ink font-bold leading-none">✓</span>}
                     </div>
                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
-                    <span className="text-[13px] flex-1 font-serif" style={{ color: checked ? color : '#555' }}>
+                    <span className="text-[13px] flex-1 font-serif" style={{ color: checked ? color : 'rgb(var(--muted))' }}>
                       {VOICE_LABELS[v]}
                     </span>
                     <span className="text-[11px] text-studio-muted truncate max-w-[120px]">{track.name}</span>
@@ -383,7 +385,7 @@ export function RecordTab() {
                         className="flex-1 h-[3px] rounded"
                         style={{
                           accentColor: color,
-                          background: `linear-gradient(90deg,${color} ${vol*100}%,#2a2418 ${vol*100}%)`,
+                          background: `linear-gradient(90deg,${color} ${vol*100}%,rgb(var(--border2)) ${vol*100}%)`,
                         }}
                       />
                       <span className="text-[10px] tabular-nums w-8 text-right" style={{ color }}>
@@ -405,8 +407,8 @@ export function RecordTab() {
             onClick={togglePreview}
             className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-all text-[13px]"
             style={isPreviewing
-              ? { borderColor: '#E8C54755', background: '#E8C54712', color: '#E8C547' }
-              : { borderColor: '#2a2418', background: 'transparent', color: '#888' }
+              ? { borderColor: 'rgb(var(--gold) / 0.33)', background: 'rgb(var(--gold) / 0.07)', color: 'rgb(var(--gold))' }
+              : { borderColor: 'rgb(var(--border2))', background: 'transparent', color: 'rgb(var(--strong))' }
             }
           >
             <span className="text-base">{isPreviewing ? '⏹' : '▶'}</span>

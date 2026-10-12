@@ -2,16 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Thème : canaux RGB (utilisés via rgb(var(--x) / alpha)). Sombre par défaut ; clair via <html data-theme="light"> */
 :root {
-  --bg: #080812;
-  --surface: #12100a;
-  --border: #1e1c18;
-  --gold: #E8C547;
-  --gold-dim: #B8962A;
-  --green: #4ADE80;
-  --red: #FF4444;
-  --text: #E8E0D0;
-  --muted: #555555;
+  color-scheme: dark;
+  --bg: 8 8 18;
+  --bg2: 10 10 15;
+  --grad1: 26 16 8;
+  --surface: 18 16 10;
+  --surface2: 14 12 8;
+  --raised: 26 24 20;
+  --border: 30 28 24;
+  --border2: 42 36 24;
+  --text: 232 224 208;
+  --strong: 153 153 153;
+  --soft: 119 119 119;
+  --muted: 85 85 85;
+  --faint: 68 68 68;
+  --muted2: 51 51 51;
+  --ink: 8 8 18;
+  --gold: 232 197 71;
+  --gold-dim: 184 150 42;
+  --green: 74 222 128;
+  --green-soft: 26 74 26;
+  --green-line: 42 74 42;
+  --red: 255 68 68;
+  --red-dark: 204 34 34;
+  --orange: 255 153 68;
+  --coral: 255 102 68;
+  --blue: 71 168 232;
+  --pink: 244 114 182;
+  --overlay: 255 255 255;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: 246 243 236;
+  --bg2: 250 248 243;
+  --grad1: 255 249 232;
+  --surface: 255 255 255;
+  --surface2: 251 249 244;
+  --raised: 239 235 224;
+  --border: 228 223 210;
+  --border2: 210 203 184;
+  --text: 42 36 24;
+  --strong: 66 60 46;
+  --soft: 94 88 70;
+  --muted: 122 115 95;
+  --faint: 148 140 119;
+  --muted2: 181 174 156;
+  --ink: 255 255 255;
+  --gold: 154 111 0;
+  --gold-dim: 122 88 0;
+  --green: 21 128 61;
+  --green-soft: 220 245 227;
+  --green-line: 134 211 160;
+  --red: 198 40 40;
+  --red-dark: 204 34 34;
+  --orange: 194 98 10;
+  --coral: 212 64 26;
+  --blue: 29 111 176;
+  --pink: 219 39 119;
+  --overlay: 0 0 0;
 }
 
 * {
@@ -23,15 +74,15 @@
 html,
 body {
   min-height: 100vh;
-  background: radial-gradient(ellipse at 20% 10%, #1a1008 0%, #0a0a0f 60%, #080812 100%);
+  background: radial-gradient(ellipse at 20% 10%, rgb(var(--grad1)) 0%, rgb(var(--bg2)) 60%, rgb(var(--bg)) 100%);
   font-family: Georgia, 'Times New Roman', serif;
-  color: #E8E0D0;
+  color: rgb(var(--text));
   -webkit-font-smoothing: antialiased;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-thumb { background: #2a2418; border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--border2)); border-radius: 2px; }
 
 /* Range inputs */
 input[type='range'] {
@@ -44,15 +95,15 @@ input[type='range']::-webkit-slider-thumb {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #E8C547;
+  background: rgb(var(--gold));
   cursor: pointer;
-  box-shadow: 0 0 5px #E8C54755;
+  box-shadow: 0 0 5px rgb(var(--gold) / 0.33);
 }
 input[type='range']::-moz-range-thumb {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #E8C547;
+  background: rgb(var(--gold));
   border: none;
   cursor: pointer;
 }

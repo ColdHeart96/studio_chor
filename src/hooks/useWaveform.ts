@@ -1,13 +1,14 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { themeColor } from '@/lib/theme'
 import { extractPeaks, drawWaveform } from '@/lib/audio/waveformUtils'
 
 export function useWaveform(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   audioBuffer: AudioBuffer | null,
   progress = 0,
-  color = '#2a2418',
-  progressColor = '#E8C547'
+  color = themeColor('border2'),
+  progressColor = themeColor('gold')
 ) {
   const [peaks, setPeaks] = useState<number[]>([])
 

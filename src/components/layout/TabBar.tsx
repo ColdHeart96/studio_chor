@@ -44,7 +44,7 @@ export function TabBar({ role, takesCount }: { role: UserRole; takesCount?: numb
               'px-3.5 py-2.5 bg-transparent border-b-2 text-[11px] uppercase tracking-[0.12em] font-serif cursor-pointer transition-all whitespace-nowrap flex-shrink-0',
               active
                 ? 'border-b-studio-gold text-studio-gold'
-                : 'border-b-transparent text-studio-muted hover:text-[#888]'
+                : 'border-b-transparent text-studio-muted hover:text-studio-strong'
             )}
           >
             {tab.icon}&nbsp;&nbsp;{tab.label}

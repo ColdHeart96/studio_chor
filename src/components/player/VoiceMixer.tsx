@@ -1,7 +1,9 @@
 'use client'
-import { VOICE_LABELS, VOICE_COLORS, VOICE_PARTS } from '@/lib/constants'
+import { VOICE_LABELS, VOICE_PARTS } from '@/lib/constants'
+import { useTheme } from '@/lib/theme'
 import type { VoicePart, Track } from '@/types/app.types'
 import { cn } from '@/lib/utils'
+import { WaveformRenderer } from '@/components/waveform/WaveformRenderer'
 
 export interface TrackMixState {
   volume: number   // 0–1.5
@@ -13,13 +15,20 @@ export type MixStateMap = Record<VoicePart, TrackMixState>
 
 interface VoiceMixerProps {
   tracks: Partial<Record<VoicePart, Track>>
+  /** Pics de chaque voix : une mini forme d'onde est affichée dans sa ligne */
+  peaks: Partial<Record<VoicePart, number[]>>
+  duration: number
+  currentTime: number
+  onSeek: (time: number) => void
+  loopRegion?: { a: number; b: number }
   mixState: MixStateMap
   onVolumeChange: (voice: VoicePart, vol: number) => void
   onMuteToggle: (voice: VoicePart) => void
   onSoloToggle: (voice: VoicePart) => void
 }
 
-export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onSoloToggle }: VoiceMixerProps) {
+export function VoiceMixer({ tracks, peaks, duration, currentTime, onSeek, loopRegion, mixState, onVolumeChange, onMuteToggle, onSoloToggle }: VoiceMixerProps) {
+  const { voiceColors: VOICE_COLORS } = useTheme()
   const loadedParts = VOICE_PARTS.filter(v => tracks[v])
   if (loadedParts.length === 0) return null
 
@@ -43,8 +52,9 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
         return (
           <div
             key={voice}
-            className="flex items-center gap-2.5 px-3.5 py-2.5 border border-studio-border rounded-xl transition-all"
+            className="px-3.5 py-2.5 border border-studio-border rounded-xl transition-all"
           >
+            <div className="flex items-center gap-2.5">
             {/* Color dot */}
             <div
               className="w-2 h-2 rounded-full flex-shrink-0"
@@ -67,7 +77,7 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
               style={{
                 appearance: 'none',
                 height: '3px',
-                background: `linear-gradient(90deg, ${color} ${state.volume * 100 / 1.5}%, #2a2418 ${state.volume * 100 / 1.5}%)`,
+                background: `linear-gradient(90deg, ${color} ${state.volume * 100 / 1.5}%, rgb(var(--border2)) ${state.volume * 100 / 1.5}%)`,
                 borderRadius: '2px',
               }}
             />
@@ -85,8 +95,8 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] border font-serif transition-all',
                 state.solo
-                  ? 'bg-[#E8C54722] border-studio-gold text-studio-gold'
-                  : 'bg-transparent border-studio-border text-[#444] hover:text-[#888]'
+                  ? 'bg-[rgb(var(--gold)/0.13)] border-studio-gold text-studio-gold'
+                  : 'bg-transparent border-studio-border text-studio-faint hover:text-studio-strong'
               )}
             >
               S
@@ -100,12 +110,28 @@ export function VoiceMixer({ tracks, mixState, onVolumeChange, onMuteToggle, onS
               className={cn(
                 'px-2 py-0.5 rounded text-[11px] border font-serif transition-all',
                 state.muted
-                  ? 'bg-[#FF444422] border-studio-red text-studio-red'
-                  : 'bg-transparent border-studio-border text-[#444] hover:text-[#888]'
+                  ? 'bg-[rgb(var(--red)/0.13)] border-studio-red text-studio-red'
+                  : 'bg-transparent border-studio-border text-studio-faint hover:text-studio-strong'
               )}
             >
               M
             </button>
+            </div>
+
+            {/* Mini forme d'onde de la voix (estompée si la voix est coupée) */}
+            {peaks[voice] && (
+              <div className={cn('mt-2 transition-opacity', (state.muted) && 'opacity-40')}>
+                <WaveformRenderer
+                  peaks={peaks[voice]!}
+                  duration={duration}
+                  currentTime={currentTime}
+                  color={color}
+                  onSeek={onSeek}
+                  loopRegion={loopRegion}
+                  height={22}
+                />
+              </div>
+            )}
           </div>
         )
       })}

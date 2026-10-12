@@ -20,13 +20,13 @@ export function SpeedControl({ speed, onChange }: SpeedControlProps) {
         style={{
           appearance: 'none',
           height: '3px',
-          background: `linear-gradient(90deg, #E8C547 ${(speed - 50) / 100 * 100}%, #2a2418 ${(speed - 50) / 100 * 100}%)`,
+          background: `linear-gradient(90deg, rgb(var(--gold)) ${(speed - 50) / 100 * 100}%, rgb(var(--border2)) ${(speed - 50) / 100 * 100}%)`,
           borderRadius: '2px',
         }}
       />
       <button
         onClick={() => onChange(100)}
-        className="px-2.5 py-1 bg-transparent border border-studio-border2 rounded text-[#666] text-[11px] font-serif cursor-pointer hover:text-[#888] transition-colors"
+        className="px-2.5 py-1 bg-transparent border border-studio-border2 rounded text-studio-soft text-[11px] font-serif cursor-pointer hover:text-studio-strong transition-colors"
       >
         Reset
       </button>
